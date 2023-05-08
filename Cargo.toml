@@ -1,0 +1,19 @@
+[package]
+name = "systemd-install"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+home = "0.5.5"
+itertools = "0.10.5"
+shell-escape = "0.1.5"
+testcontainers = "0.14.0"
+thiserror = "1.0.40"
+time = "0.3.21"
+tracing = "0.1.37"
+typed-builder = "0.14.0"
+
+[dev-dependencies]
+testcontainers = "0.14.0"
