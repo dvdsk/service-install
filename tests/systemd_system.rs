@@ -1,18 +1,33 @@
+use std::collections::hash_map::DefaultHasher;
 use std::env;
+use std::hash::{Hash, Hasher};
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+fn dockerfile_tag(image: &str) -> String {
+    let cwd = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let path = format!("{cwd}/tests/{image}.dockerfile");
+    let mut hash_state = DefaultHasher::new();
+    std::fs::read_to_string(&path)
+        .unwrap()
+        .hash(&mut hash_state);
+    let hash = hash_state.finish();
+    format!("{hash}")
+}
+
 fn build_image(image: &str) {
     let cwd = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let dockerfile = format!("{cwd}/tests/{image}.dockerfile");
+    let tag = dockerfile_tag(image);
 
     // Build the images used for all tests
     let output = Command::new("podman")
         .arg("build")
         .arg("--file")
-        .arg(&format!("{cwd}/tests/{image}.dockerfile"))
+        .arg(dockerfile)
         .arg("--force-rm")
-        .arg("--tag")
-        .arg("cli:latest")
+        .arg("--tag") // takes argument <name>:<tag> .... yeah...
+        .arg(format!("{image}:{tag}"))
         .arg(".")
         .output()
         .unwrap();
@@ -23,19 +38,25 @@ fn build_image(image: &str) {
 }
 
 fn image_exists(image: &str) -> bool {
+    #[derive(PartialEq, Eq)]
+    struct Entry {
+        repo: String,
+        tag: String,
+    }
+
     let output = Command::new("podman").arg("images").output().unwrap();
     if !output.status.success() {
         panic!("stderr: {}", String::from_utf8(output.stderr).unwrap());
     }
 
     let list = String::from_utf8(output.stdout).unwrap();
-    let mut list = list
-        .lines()
-        .map(str::split_whitespace)
-        .filter_map(|mut w| w.nth(0));
+    let mut list = list.lines().map(str::split_whitespace).map(|mut w| Entry {
+        repo: w.next().unwrap().to_string(),
+        tag: w.next().unwrap().to_string(),
+    });
 
-    let image_id = format!("localhost/{image}");
-    list.any(|word| word == image_id)
+    let tag = dockerfile_tag(image);
+    list.any(|word| word.tag == tag)
 }
 
 pub struct Container {
@@ -98,6 +119,7 @@ impl Drop for Container {
 #[test]
 fn test() {
     if !image_exists("cli") {
+        println!("image outdated/missing, building from dockerfile");
         build_image("cli");
     }
 
