@@ -17,14 +17,13 @@ fn dockerfile_tag(image: &str) -> String {
 
 fn build_image(image: &str) {
     let cwd = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let dockerfile = format!("{cwd}/tests/{image}.dockerfile");
+    let build_script = format!("{cwd}/tests/{image}.sh");
     let tag = dockerfile_tag(image);
 
     // Build the images used for all tests
-    let output = Command::new("podman")
-        .arg("build")
-        .arg("--file")
-        .arg(dockerfile)
+    let output = Command::new("buildah")
+        .arg("unshare")
+        .arg(build_script)
         .arg("--force-rm")
         .arg("--tag") // takes argument <name>:<tag> .... yeah...
         .arg(format!("{image}:{tag}"))
@@ -76,6 +75,9 @@ impl Container {
             .arg(&image_id)
             .arg("--name")
             .arg(&name)
+            // needed to run systemd in container. Container will
+            // still run as a user in the host system.
+            .arg("--privileged") 
             .spawn()
             .unwrap();
 
