@@ -1,15 +1,18 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 
-# using fedora as it has dnf --installroot which is needed to install
-# packages in the container without root
+# currently broken issue reported:
+# https://github.com/containers/buildah/issues/2611
+
+set -e
+
 ctr=$(buildah from fedora) 
+echo "ctr: $ctr"
 # mnt=$(buildah mount $ctr)
 
-# buildah run $ctr dnf -y install systemd
-buildah run $ctr /bin/sh -c 'dnf -y install systemd'
+buildah run "$ctr" /bin/sh -c 'dnf -y install systemd'
 buildah config \
 	--author="renewc" \
 	--entrypoint '["/usr/sbin/init"]' \
-	--workingdir='/root' $ctr
+	--workingdir='/root' "$ctr"
 
-buildah commit $ctr test_img
+buildah commit "$ctr" "service-install-systemd-test"
