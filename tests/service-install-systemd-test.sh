@@ -15,4 +15,4 @@ buildah config \
 	--entrypoint '["/usr/sbin/init"]' \
 	--workingdir='/root' "$ctr"
 
-buildah commit "$ctr" "service-install-systemd-test:hihi"
+buildah commit "$ctr" "service-install-systemd-test"

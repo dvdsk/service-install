@@ -1,8 +1,8 @@
-use systemd_install::Install;
+use service_install::{Install, Schedule};
 use time::Time;
 
 fn main() {
-    let schedule = systemd_install::Schedule::Daily(Time::from_hms(10, 10, 10).unwrap());
+    let schedule = Schedule::Daily(Time::from_hms(10, 10, 10).unwrap());
     Install::system()
         .current_exe()
         .unwrap()

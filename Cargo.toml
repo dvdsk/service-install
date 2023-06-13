@@ -1,5 +1,5 @@
 [package]
-name = "systemd-install"
+name = "service-install"
 version = "0.1.0"
 edition = "2021"
 
