@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# currently broken issue reported:
+# currently broken issue reported: 
 # https://github.com/containers/buildah/issues/2611
 
 set -e
@@ -15,4 +15,4 @@ buildah config \
 	--entrypoint '["/usr/sbin/init"]' \
 	--workingdir='/root' "$ctr"
 
-buildah commit "$ctr" "service-install-systemd-test"
+buildah commit "$ctr" "systemd"

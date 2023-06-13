@@ -1,4 +1,5 @@
 use core::fmt;
+use std::ffi::OsStr;
 use std::process::{Child, Command, Stdio};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -23,6 +24,10 @@ pub trait ContainerEngine {
     fn stop(id: &str) -> Result<(), Self::Error>;
     fn remove(id: &str) -> Result<(), Self::Error>;
     fn spawn(image: String, name: &str) -> Result<Child, Self::Error>;
+    fn exec<I, S>(container: impl AsRef<OsStr>, cmd: I) -> Result<String, Self::Error>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>;
 }
 
 pub struct Podman;
@@ -30,7 +35,7 @@ pub struct Podman;
 impl ContainerEngine for Podman {
     type Error = CommandError;
     fn images() -> Result<Vec<Image>, Self::Error> {
-        Ok(podman_cmd(&["images"])?
+        Ok(podman_cmd(&[&"images"])?
             .lines()
             .skip(1)
             .map(str::split_whitespace)
@@ -43,7 +48,7 @@ impl ContainerEngine for Podman {
     }
 
     fn containers() -> Result<Vec<Container>, Self::Error> {
-        Ok(podman_cmd(&["ps", "-a"])?
+        Ok(podman_cmd(&[&"ps", &"-a"])?
             .lines()
             .skip(1)
             .map(str::split_whitespace)
@@ -56,7 +61,7 @@ impl ContainerEngine for Podman {
     }
 
     fn stop(id: &str) -> Result<(), Self::Error> {
-        match podman_cmd(&["stop", id]) {
+        match podman_cmd(&[&"stop", &id]) {
             Ok(_) => Ok(()),
             Err(CommandError::Failed { stderr })
                 if stderr.starts_with("Error: no container with name or ID") =>
@@ -68,7 +73,7 @@ impl ContainerEngine for Podman {
     }
 
     fn remove(id: &str) -> Result<(), Self::Error> {
-        match podman_cmd(&["rm", id]) {
+        match podman_cmd(&[&"rm", &id]) {
             Ok(_) => Ok(()),
             Err(CommandError::Failed { stderr })
                 if stderr.starts_with("Error: no container with name or ID") =>
@@ -92,6 +97,22 @@ impl ContainerEngine for Podman {
             .spawn()
             .map_err(CommandError::Io)
     }
+
+    // blocks until exec is done, returns stdout
+    fn exec<I, S>(container_id: impl AsRef<OsStr>, cmd: I) -> Result<String, Self::Error>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        let cmd: Vec<_> = cmd.into_iter().collect();
+        let cmd_args = cmd.iter().map(|s| s.as_ref());
+        let args = [OsStr::new("exec"), container_id.as_ref()]
+            .into_iter()
+            .chain(cmd_args);
+
+        let output = podman_cmd(args)?;
+        Ok(output)
+    }
 }
 
 #[derive(Debug)]
@@ -100,7 +121,11 @@ pub enum CommandError {
     Failed { stderr: String },
 }
 
-fn podman_cmd(args: &[&str]) -> Result<String, CommandError> {
+fn podman_cmd<I, S>(args: I) -> Result<String, CommandError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
     let output = Command::new("podman")
         .args(args)
         .output()

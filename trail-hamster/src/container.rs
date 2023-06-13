@@ -1,4 +1,5 @@
 use std::collections::hash_map::DefaultHasher;
+use std::ffi::OsStr;
 use std::hash::{Hash, Hasher};
 use std::io::{self, BufRead, BufReader, Read};
 use std::path::PathBuf;
@@ -7,6 +8,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, TryRecvError};
 use std::thread::JoinHandle;
 use std::{env, thread};
+
+use crate::podman::CommandError;
 
 use super::buildah::Buildah;
 use super::podman;
@@ -27,19 +30,22 @@ fn tag_from(image: &str) -> String {
     format!("{hash:x}")
 }
 
-fn build_image(image: &str) {
+fn build_image(image: &str, tag: &str) {
     // Build the images used for all tests
     Buildah::build(&build_script_path(image)).unwrap();
 
     // rename image <name>:<tag> to change the default tag
     // default is `latest`
-    let tag = tag_from(image);
+    let post_build_tag = tag_from(image);
+    assert_eq!(
+        post_build_tag, tag,
+        "image build instructions changed while building"
+    );
     Buildah::rename(image, &format!("{image}:{tag}")).unwrap();
     Buildah::remove_image(image).unwrap();
 }
 
-fn image_exists(image: &str) -> bool {
-    let tag = dbg!(tag_from(image));
+fn image_exists(image: &str, tag: &str) -> bool {
     Podman::images()
         .unwrap()
         .into_iter()
@@ -99,22 +105,21 @@ pub struct Container {
 
 #[derive(Debug)]
 pub enum ContainerError {
-    Engine {
-
-    stderr: Vec<String> },
-    Halt( std::io::Error),
+    Engine(CommandError),
+    Spawn { stderr: Vec<String> },
+    Halt(std::io::Error),
 }
 
 impl Container {
     #[must_use]
-    fn run_existing(image: &str) -> Self {
+    fn run_existing(image: &str, tag: &str) -> Self {
         static FREE_CONTAINER_ID: AtomicUsize = AtomicUsize::new(0);
 
         let container_id = FREE_CONTAINER_ID.fetch_add(1, Ordering::SeqCst);
         let name = format!("test-{}-{container_id}", env!("CARGO_PKG_NAME"));
         // might be hanging around from previous run
         remove_containers(|e| e.name == name);
-        let image = format!("localhost/{image}");
+        let image = format!("localhost/{image}:{tag}");
         let mut handle = Podman::spawn(image, &name).unwrap();
 
         let stderr = handle.stderr.take().unwrap();
@@ -128,11 +133,12 @@ impl Container {
 
     // will build the image if needed
     pub fn run(image: &str) -> Self {
-        if !image_exists(image) {
+        let tag = tag_from(image);
+        if !image_exists(image, &tag) {
             println!("image did not already exist, building it");
-            build_image(image);
+            build_image(image, &tag);
         }
-        Self::run_existing(image)
+        Self::run_existing(image, &tag)
     }
 
     pub fn check(&mut self) -> Result<(), ContainerError> {
@@ -141,11 +147,19 @@ impl Container {
             return Ok(());
         }
 
-        Err(ContainerError::Engine { stderr: lines })
+        Err(ContainerError::Spawn { stderr: lines })
     }
 
     pub fn kill(&mut self) -> Result<(), ContainerError> {
         self.handle.kill().map_err(ContainerError::Halt)
+    }
+
+    pub fn exec<I, S>(&mut self, cmd: I) -> Result<String, ContainerError>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        Podman::exec(&self.name, cmd).map_err(ContainerError::Engine)
     }
 }
 
@@ -154,17 +168,4 @@ impl Drop for Container {
         Podman::stop(&self.name).unwrap();
         Podman::remove(&self.name).unwrap();
     }
-}
-
-#[test]
-fn test() {
-    const IMAGE: &str = "service-install-systemd-test";
-    if !image_exists(IMAGE) {
-        println!("image did not already exist, building it");
-        build_image(IMAGE);
-    }
-
-    let mut container = Container::run(IMAGE);
-    thread::sleep(std::time::Duration::from_millis(250));
-    container.check().unwrap();
 }
