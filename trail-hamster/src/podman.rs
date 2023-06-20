@@ -1,6 +1,8 @@
 use core::fmt;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
+use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Image {
@@ -28,6 +30,7 @@ pub trait ContainerEngine {
     where
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>;
+    fn copy_into(name: &str, source: &Path, dest: &Path) -> Result<(), Self::Error>;
 }
 
 pub struct Podman;
@@ -112,6 +115,13 @@ impl ContainerEngine for Podman {
 
         let output = podman_cmd(args)?;
         Ok(output)
+    }
+
+    fn copy_into(name: &str, source: &Path, dest: &Path) -> Result<(), Self::Error> {
+        let mut container_dest = OsString::from_str(name).unwrap();
+        container_dest.push(dest.as_os_str());
+        podman_cmd([OsStr::new("cp"), source.as_os_str(), &container_dest])?;
+        Ok(())
     }
 }
 

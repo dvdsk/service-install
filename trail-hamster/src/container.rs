@@ -2,7 +2,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::ffi::OsStr;
 use std::hash::{Hash, Hasher};
 use std::io::{self, BufRead, BufReader, Read};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, TryRecvError};
@@ -11,9 +11,13 @@ use std::{env, thread};
 
 use crate::podman::CommandError;
 
+use self::fs::ContainerFs;
+
 use super::buildah::Buildah;
 use super::podman;
 use super::podman::{ContainerEngine, Podman};
+
+mod fs;
 
 fn build_script_path(image: &str) -> PathBuf {
     let cwd = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -97,9 +101,13 @@ impl BackgroundLineReader {
     }
 }
 
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
 pub struct Container {
     name: String,
+    #[derivative(Debug = "ignore")]
     handle: Child,
+    #[derivative(Debug = "ignore")]
     stderr: BackgroundLineReader,
 }
 
@@ -160,6 +168,18 @@ impl Container {
         S: AsRef<OsStr>,
     {
         Podman::exec(&self.name, cmd).map_err(ContainerError::Engine)
+    }
+
+    pub fn copy_into(&mut self, source: &Path, dest: &Path) -> Result<(), ContainerError> {
+        Podman::copy_into(&self.name, source, dest).map_err(ContainerError::Engine)
+    }
+
+    pub fn fs<'a>(&'a self) -> ContainerFs<'a> {
+        let mount_path = todo!("mount");
+        ContainerFs {
+            container: self,
+            mount_path,
+        }
     }
 }
 

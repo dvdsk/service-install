@@ -10,5 +10,6 @@ fn install() {
     container.check().unwrap();
 
     dbg!(container.exec(&["ls", "-la"]));
+    container.fs().file().open().unwrap();
 
 }
