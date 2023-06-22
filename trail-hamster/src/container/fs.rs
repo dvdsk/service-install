@@ -1,17 +1,23 @@
 use std::fs::File;
 use std::io::{self, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf as StdPathBuf;
 
 use crate::Container;
+
+mod read_dir;
+use read_dir::ReadDir;
+mod path;
+use path::PathBuf;
 
 #[derive(Debug)]
 pub struct ContainerFs<'a> {
     pub container: &'a Container,
-    pub mount_path: PathBuf,
+    pub mount_path: StdPathBuf,
 }
 
 impl<'a> ContainerFs<'a> {
-    fn local_path<P: AsRef<Path>>(&self, path: P) -> PathBuf {
+    fn local_path<P: AsRef<Path>>(&self, path: P) -> StdPathBuf {
         let path = self.mount_path.join(path.as_ref());
         assert!(path.starts_with(&self.mount_path));
         path
@@ -47,9 +53,9 @@ impl<'a> ContainerFs<'a> {
         self.open_file(path)?.read_to_string(&mut buf)?;
         Ok(buf)
     }
-    pub fn read_dir<P: AsRef<Path>>(&self, path: P) -> io::Result<std::fs::ReadDir> {
+    pub fn read_dir<P: AsRef<Path>>(&self, path: P) -> io::Result<ReadDir> {
         let path = self.local_path(path);
-        std::fs::read_dir(path)
+        ReadDir::new(path, &self.mount_path)
     }
     pub fn metadata<P: AsRef<Path>>(&self, path: P) -> io::Result<std::fs::Metadata> {
         let path = self.local_path(path);

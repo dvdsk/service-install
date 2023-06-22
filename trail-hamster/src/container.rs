@@ -1,5 +1,5 @@
 use std::collections::hash_map::DefaultHasher;
-use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::hash::{Hash, Hasher};
 use std::io::{self, BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -12,12 +12,14 @@ use std::{env, thread};
 use crate::podman::CommandError;
 
 use self::fs::ContainerFs;
+use self::process::Command;
 
 use super::buildah::Buildah;
 use super::podman;
 use super::podman::{ContainerEngine, Podman};
 
 mod fs;
+mod process;
 
 fn build_script_path(image: &str) -> PathBuf {
     let cwd = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -121,10 +123,8 @@ pub enum ContainerError {
 impl Container {
     #[must_use]
     fn run_existing(image: &str, tag: &str) -> Self {
-        static FREE_CONTAINER_ID: AtomicUsize = AtomicUsize::new(0);
-
-        let container_id = FREE_CONTAINER_ID.fetch_add(1, Ordering::SeqCst);
-        let name = format!("test-{}-{container_id}", env!("CARGO_PKG_NAME"));
+        let id: u64 = rand::random();
+        let name = format!("test-{}-{id}", env!("CARGO_PKG_NAME"));
         // might be hanging around from previous run
         remove_containers(|e| e.name == name);
         let image = format!("localhost/{image}:{tag}");
@@ -162,24 +162,20 @@ impl Container {
         self.handle.kill().map_err(ContainerError::Halt)
     }
 
-    pub fn exec<I, S>(&mut self, cmd: I) -> Result<String, ContainerError>
-    where
-        I: IntoIterator<Item = S>,
-        S: AsRef<OsStr>,
-    {
-        Podman::exec(&self.name, cmd).map_err(ContainerError::Engine)
-    }
-
     pub fn copy_into(&mut self, source: &Path, dest: &Path) -> Result<(), ContainerError> {
         Podman::copy_into(&self.name, source, dest).map_err(ContainerError::Engine)
     }
 
-    pub fn fs<'a>(&'a self) -> ContainerFs<'a> {
-        let mount_path = todo!("mount");
-        ContainerFs {
+    pub fn fs<'a>(&'a self) -> Result<ContainerFs<'a>, ContainerError> {
+        let mount_path = Podman::mount(&self.name).map_err(ContainerError::Engine)?;
+        Ok(ContainerFs {
             container: self,
             mount_path,
-        }
+        })
+    }
+
+    pub fn command<'a, S: Into<OsString>>(&'a self, program: S) -> process::Command<'a> {
+        Command::new(self, program.into())
     }
 }
 

@@ -1,6 +1,6 @@
 use core::fmt;
 use std::ffi::{OsStr, OsString};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::str::FromStr;
 
@@ -30,6 +30,7 @@ pub trait ContainerEngine {
     where
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>;
+    fn mount(container: impl AsRef<OsStr>) -> Result<PathBuf, Self::Error>;
     fn copy_into(name: &str, source: &Path, dest: &Path) -> Result<(), Self::Error>;
 }
 
@@ -115,6 +116,11 @@ impl ContainerEngine for Podman {
 
         let output = podman_cmd(args)?;
         Ok(output)
+    }
+
+    fn mount(container: impl AsRef<OsStr>) -> Result<PathBuf, Self::Error> {
+        let path = podman_cmd([OsStr::new("mount"), container.as_ref()])?;
+        Ok(PathBuf::from(path))
     }
 
     fn copy_into(name: &str, source: &Path, dest: &Path) -> Result<(), Self::Error> {
