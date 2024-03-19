@@ -1,9 +1,11 @@
+use core::fmt;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::Path;
 use std::path::PathBuf as StdPathBuf;
 
 use crate::Container;
+use tracing::instrument;
 
 mod read_dir;
 use read_dir::ReadDir;
@@ -17,19 +19,33 @@ pub struct ContainerFs<'a> {
 }
 
 impl<'a> ContainerFs<'a> {
-    fn local_path<P: AsRef<Path>>(&self, path: P) -> StdPathBuf {
-        let path = self.mount_path.join(path.as_ref());
+    #[instrument(ret)]
+    fn local_path<P>(&self, path: P) -> StdPathBuf
+    where
+        P: AsRef<Path> + fmt::Debug,
+    {
+        let mut path = path.as_ref();
+        if path.starts_with("/") {
+            path = path.strip_prefix("/").unwrap();
+        }
+        let path = self.mount_path.join(path);
         assert!(path.starts_with(&self.mount_path));
         path
     }
-    pub fn create_file<P: AsRef<Path>>(&'a self, path: P) -> io::Result<ContainerFile<'a>> {
+    pub fn create_file<P>(&'a self, path: P) -> io::Result<ContainerFile<'a>>
+    where
+        P: AsRef<Path> + std::fmt::Debug,
+    {
         self.open_options()
             .write(true)
             .create(true)
             .truncate(true)
             .open(path)
     }
-    pub fn open_file<P: AsRef<Path>>(&'a self, path: P) -> io::Result<ContainerFile<'a>> {
+    pub fn open_file<P>(&'a self, path: P) -> io::Result<ContainerFile<'a>>
+    where
+        P: AsRef<Path> + std::fmt::Debug,
+    {
         self.open_options().read(true).open(path)
     }
     pub fn open_options(&'a self) -> OpenOptions<'a> {
@@ -43,21 +59,33 @@ impl<'a> ContainerFs<'a> {
             write: false,
         }
     }
-    pub fn read<P: AsRef<Path>>(&self, path: P) -> io::Result<Vec<u8>> {
+    pub fn read<P>(&self, path: P) -> io::Result<Vec<u8>>
+    where
+        P: AsRef<Path> + std::fmt::Debug,
+    {
         let mut buf = Vec::new();
         self.open_file(path)?.read_to_end(&mut buf)?;
         Ok(buf)
     }
-    pub fn read_to_string<P: AsRef<Path>>(&self, path: P) -> io::Result<String> {
+    pub fn read_to_string<P>(&self, path: P) -> io::Result<String>
+    where
+        P: AsRef<Path> + fmt::Debug,
+    {
         let mut buf = String::new();
         self.open_file(path)?.read_to_string(&mut buf)?;
         Ok(buf)
     }
-    pub fn read_dir<P: AsRef<Path>>(&self, path: P) -> io::Result<ReadDir> {
+    pub fn read_dir<P>(&self, path: P) -> io::Result<ReadDir>
+    where
+        P: AsRef<Path> + std::fmt::Debug,
+    {
         let path = self.local_path(path);
         ReadDir::new(path, &self.mount_path)
     }
-    pub fn metadata<P: AsRef<Path>>(&self, path: P) -> io::Result<std::fs::Metadata> {
+    pub fn metadata<P>(&self, path: P) -> io::Result<std::fs::Metadata>
+    where
+        P: AsRef<Path> + std::fmt::Debug,
+    {
         let path = self.local_path(path);
         std::fs::metadata(path)
     }
@@ -84,7 +112,10 @@ macro_rules! open_option {
 }
 
 impl<'a> OpenOptions<'a> {
-    fn open<P: AsRef<Path>>(self, path: P) -> io::Result<ContainerFile<'a>> {
+    fn open<P>(self, path: P) -> io::Result<ContainerFile<'a>>
+    where
+        P: AsRef<Path> + std::fmt::Debug,
+    {
         use std::fs::OpenOptions as StdOptenOptions;
         let path = self.fs.local_path(path);
         let handle = StdOptenOptions::new()

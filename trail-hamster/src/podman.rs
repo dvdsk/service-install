@@ -119,8 +119,13 @@ impl ContainerEngine for Podman {
     }
 
     fn mount(container: impl AsRef<OsStr>) -> Result<PathBuf, Self::Error> {
-        let path = podman_cmd([OsStr::new("mount"), container.as_ref()])?;
-        Ok(PathBuf::from(path))
+        let path = podman_cmd([
+            OsStr::new("unshare"),
+            OsStr::new("podman"),
+            OsStr::new("mount"),
+            container.as_ref(),
+        ])?;
+        Ok(PathBuf::from(path.trim()))
     }
 
     fn copy_into(name: &str, source: &Path, dest: &Path) -> Result<(), Self::Error> {

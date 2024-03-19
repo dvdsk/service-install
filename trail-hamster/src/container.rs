@@ -181,7 +181,7 @@ impl Container {
 
 impl Drop for Container {
     fn drop(&mut self) {
-        Podman::stop(&self.name).unwrap();
-        Podman::remove(&self.name).unwrap();
+        // Podman::stop(&self.name).unwrap();
+        // Podman::remove(&self.name).unwrap();
     }
 }
