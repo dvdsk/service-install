@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 
@@ -119,11 +120,11 @@ where
     }
 
     #[must_use]
-    pub fn name(self, name: impl Into<String>) -> Install<Path, Set, TriggerSet> {
+    pub fn name(self, name: impl Display) -> Install<Path, Set, TriggerSet> {
         Install {
             mode: self.mode,
             path: self.path,
-            name: Some(name.into()),
+            name: Some(name.to_string()),
             trigger: self.trigger,
             description: self.description,
             working_dir: self.working_dir,
@@ -136,7 +137,7 @@ where
     }
 
     #[must_use]
-    pub fn on_schedule(self, schedule: Schedule) -> Install<Path, Name, NotSet> {
+    pub fn on_schedule(self, schedule: Schedule) -> Install<Path, Name, Set> {
         Install {
             mode: self.mode,
             path: self.path,
@@ -153,7 +154,7 @@ where
     }
 
     #[must_use]
-    pub fn on_boot(self) -> Install<Path, Name, NotSet> {
+    pub fn on_boot(self) -> Install<Path, Name, Set> {
         Install {
             mode: self.mode,
             path: self.path,
@@ -170,13 +171,13 @@ where
     }
 
     #[must_use]
-    pub fn description(self, description: String) -> Install<Path, Name, Set> {
+    pub fn description(self, description: impl Display) -> Install<Path, Name, Set> {
         Install {
             mode: self.mode,
             path: self.path,
             name: self.name,
             trigger: self.trigger,
-            description: Some(description),
+            description: Some(description.to_string()),
             working_dir: self.working_dir,
             args: self.args,
 
