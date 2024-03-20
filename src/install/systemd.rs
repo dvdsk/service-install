@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use crate::install::builder::Trigger;
 use crate::Schedule;
 
-use super::{InitError, InitParams, InitSystem, Mode};
+use super::{InitSetupError, InitParams, InitSystem, Mode, InitTearDownError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SystemCtlError {
@@ -44,10 +44,10 @@ impl InitSystem for Systemd {
     fn name(&self) -> &'static str {
         "systemd"
     }
-    fn set_up(&self, params: &InitParams) -> Result<(), InitError> {
+    fn set_up(&self, params: &InitParams) -> Result<(), InitSetupError> {
         let path_without_extension = match params.mode {
             Mode::User => home::home_dir()
-                .ok_or(InitError::NoHome)?
+                .ok_or(InitSetupError::NoHome)?
                 .join("~/.config/systemd/user/")
                 .join(&params.name),
             Mode::System => Path::new("/etc/systemd/system").join(&params.name),
@@ -58,7 +58,7 @@ impl InitSystem for Systemd {
         }
 
         match params.trigger {
-            Trigger::OnSchedual(ref schedule) => {
+            Trigger::OnSchedule(ref schedule) => {
                 let service = render_service(&params);
                 write_unit(path_without_extension.with_extension("service"), &service)
                     .map_err(Error::Io)?;
@@ -76,6 +76,10 @@ impl InitSystem for Systemd {
         }
         Ok(())
     }
+
+    fn tear_down(&self, name: &str) -> Result<(), InitTearDownError> {
+        todo!()
+    }
 }
 
 fn render_service(params: &InitParams) -> String {
@@ -89,7 +93,7 @@ fn render_service(params: &InitParams) -> String {
 
     let description = params.description();
     let ty = match trigger {
-        Trigger::OnSchedual(_) => "oneshot",
+        Trigger::OnSchedule(_) => "oneshot",
         Trigger::OnBoot => "simple",
     };
 

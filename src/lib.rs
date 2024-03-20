@@ -1,3 +1,5 @@
+#![doc= include_str!("../README.md")]
+
 // offer user and system install
 // place files somewhere that makes sense
 // build the unit files
@@ -10,7 +12,7 @@ mod schedule;
 mod system;
 mod user;
 
-pub use install::Error as InstallError;
+pub use install::InstallError;
 pub use install::Install;
 
 pub use schedule::Schedule;

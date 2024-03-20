@@ -8,8 +8,10 @@ fn main() {
         .unwrap()
         .name("cli")
         .on_schedule(schedule)
-        .perform()
+        .install()
         .unwrap();
 
-    todo!("do testy stuff?")
+    Install::system()
+        .name("cli")
+        .remove()
 }
