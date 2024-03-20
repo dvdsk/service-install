@@ -136,7 +136,7 @@ where
     }
 
     #[must_use]
-    pub fn on_schedule(self, schedule: Schedule) -> Install<Path, Name, Set> {
+    pub fn on_schedule(self, schedule: Schedule) -> Install<Path, Name, NotSet> {
         Install {
             mode: self.mode,
             path: self.path,
@@ -153,7 +153,7 @@ where
     }
 
     #[must_use]
-    pub fn on_boot(self) -> Install<Path, Name, Set> {
+    pub fn on_boot(self) -> Install<Path, Name, NotSet> {
         Install {
             mode: self.mode,
             path: self.path,
