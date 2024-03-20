@@ -9,11 +9,7 @@ edition = "2021"
 home = "0.5.5"
 itertools = "0.10.5"
 shell-escape = "0.1.5"
-testcontainers = "0.14.0"
 thiserror = "1.0.40"
 time = "0.3.21"
 tracing = "0.1.37"
 typed-builder = "0.14.0"
-
-[dev-dependencies]
-trail-hamster = { path = "trail-hamster" }

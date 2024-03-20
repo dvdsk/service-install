@@ -114,9 +114,9 @@ pub enum MoveError {
     #[error("could not find current users home dir")]
     NoHome,
     #[error("none of the usual dirs for user binaries exist")]
-    UserDirNotAvailible,
+    UserDirNotAvailable,
     #[error("none of the usual dirs for system binaries exist")]
-    SystemDirNotAvailible,
+    SystemDirNotAvailable,
     #[error("the path did not point to a binary")]
     SourceNotFile,
     #[error("could not move binary to install location: {0}")]
@@ -148,8 +148,8 @@ fn user_dir() -> Result<Option<PathBuf>, MoveError> {
 
 fn move_files(source: &Path, mode: Mode) -> Result<PathBuf, MoveError> {
     let dir = match mode {
-        Mode::User => user_dir()?.ok_or(MoveError::UserDirNotAvailible)?,
-        Mode::System => system_dir().ok_or(MoveError::SystemDirNotAvailible)?,
+        Mode::User => user_dir()?.ok_or(MoveError::UserDirNotAvailable)?,
+        Mode::System => system_dir().ok_or(MoveError::SystemDirNotAvailable)?,
     };
 
     let name = source.file_name().ok_or(MoveError::SourceNotFile)?;

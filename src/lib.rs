@@ -6,11 +6,11 @@
 
 mod error;
 mod install;
-mod schedual;
+mod schedule;
 mod system;
 mod user;
 
 pub use install::Error as InstallError;
 pub use install::Install;
 
-pub use schedual::Schedule;
+pub use schedule::Schedule;

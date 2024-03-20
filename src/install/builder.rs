@@ -19,7 +19,7 @@ impl ToAssign for NotSet {}
 
 #[derive(Debug, Clone)]
 pub(crate) enum Trigger {
-    OnSchedual(Schedule),
+    OnSchedule(Schedule),
     OnBoot,
 }
 
@@ -141,7 +141,7 @@ where
             mode: self.mode,
             path: self.path,
             name: self.name,
-            trigger: Some(Trigger::OnSchedual(schedule)),
+            trigger: Some(Trigger::OnSchedule(schedule)),
             description: self.description,
             working_dir: self.working_dir,
             args: self.args,
