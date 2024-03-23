@@ -1,12 +1,10 @@
-use std::path::{Path, PathBuf};
-
 mod builder;
-mod systemd;
-use systemd::Systemd;
+mod init;
+mod files;
 
 pub use builder::Install;
 
-use self::builder::{ToAssign, Trigger};
+use self::builder::ToAssign;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Mode {
@@ -14,90 +12,62 @@ pub enum Mode {
     System,
 }
 
-#[derive(Debug, Clone)]
-pub struct InitParams {
-    name: String,
-    description: Option<String>,
-
-    exe_path: PathBuf,
-    exe_args: Vec<String>,
-    working_dir: Option<PathBuf>,
-
-    trigger: Trigger,
-    mode: Mode,
-}
-
-impl InitParams {
-    fn description(&self) -> String {
-        self.description
-            .clone()
-            .unwrap_or_else(|| format!("starts {}", self.name))
-    }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum InitSetupError {
-    #[error("systemd specific error")]
-    Systemd(#[from] systemd::Error),
-    #[error("could not find current users home dir")]
-    NoHome,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum InitTearDownError {
-    #[error("systemd specific error")]
-    Systemd(#[from] systemd::Error),
-    #[error("could not find current users home dir")]
-    NoHome,
-}
-
 #[derive(thiserror::Error, Debug)]
 pub enum InstallError {
     #[error("Error setting up init: {0}")]
-    Init(#[from] InitSetupError),
+    Init(#[from] init::SetupError),
     #[error("Failed to move files: {0}")]
-    Move(#[from] MoveError),
+    Move(#[from] files::MoveError),
+    #[error("Need to run as root to install to system")]
+    NeedRoot,
+    #[error("Could not find an init system we can set things up for")]
+    NoInitSystemRecognized,
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum RemoveError {
-    #[error("Could not find this executable's location")]
+    #[error("Could not find this executable's location: {0}")]
     GetExeLocation(std::io::Error),
     #[error("Failed to remove files: {0}")]
-    Move(#[from] DeleteError),
+    Move(#[from] files::DeleteError),
+    #[error("Removing from init system: {0}")]
+    Init(#[from] init::TearDownError),
+    #[error("Could not find any installation in any init system")]
+    NotInUse,
+    #[error("Need to run as root to remove a system install")]
+    NeedRoot,
 }
 
-trait InitSystem {
-    fn name(&self) -> &'static str;
-    fn set_up(&self, params: &InitParams) -> Result<(), InitSetupError>;
-    fn tear_down(&self, name: &str) -> Result<(), InitTearDownError>;
+#[derive(thiserror::Error, Debug)]
+pub enum FindInstallError {}
+
+/// Changes when in action takes place in the Step::describe
+/// function.
+pub enum Tense {
+    Past,
+    Present,
+    Future,
 }
 
-struct Cron;
-
-impl InitSystem for Cron {
-    fn name(&self) -> &'static str {
-        "cron"
-    }
-    fn set_up(&self, _params: &InitParams) -> Result<(), InitSetupError> {
-        todo!()
-    }
-    fn tear_down(&self, _params: &str) -> Result<(), InitTearDownError> {
-        todo!()
-    }
+pub trait Step {
+    fn describe(&self, tense: Tense) -> String;
+    fn perform(self) -> Result<(), Box<dyn std::error::Error>>;
 }
 
-const INIT_SYSTEMS: [&dyn InitSystem; 2] = [&Systemd {}, &Cron {}];
+const INIT_SYSTEMS: [&dyn init::System; 1] = [/* &Systemd {}, */ &init::Cron {}];
+pub struct InstallSteps(pub Vec<Box<dyn Step>>);
 
-impl Install<builder::Set, builder::Set, builder::Set> {
-    pub fn install(self) -> Result<(), InstallError> {
+impl<T: ToAssign> Install<builder::Set, builder::Set, builder::Set, T> {
+    pub fn prepare_install(self) -> Result<InstallSteps, InstallError> {
         let builder::Install {
             mode,
             path: Some(source),
             name: Some(name),
+            bin_name,
             args,
             trigger: Some(trigger),
             working_dir,
+            run_as,
             description,
             ..
         } = self
@@ -105,131 +75,81 @@ impl Install<builder::Set, builder::Set, builder::Set> {
             unreachable!("type sys guarantees path, name and trigger set")
         };
 
-        let path = move_files(&source, mode)?;
+        if let Mode::System = mode {
+            if let sudo::RunningAs::User = sudo::check() {
+                return Err(InstallError::NeedRoot);
+            }
+        }
 
-        let params = InitParams {
+        let move_step = files::move_files(source, mode)?;
+        let exe_path = move_step.target.clone();
+
+        let mut steps = vec![Box::new(move_step) as Box<dyn Step>];
+
+        let params = init::Params {
             name,
+            bin_name,
             description,
 
-            exe_path: path,
+            exe_path,
             exe_args: args,
             working_dir,
 
             trigger,
+            run_as,
             mode,
         };
 
         for init in INIT_SYSTEMS {
-            let Err(error) = init.set_up(&params) else {
-                return Ok(());
+            if init.not_available().map_err(InstallError::Init)? {
+                continue;
+            }
+
+            match init.set_up_steps(&params) {
+                Ok(init_steps) => {
+                    steps.extend(init_steps);
+                    return Ok(InstallSteps(steps));
+                }
+                Err(error) => {
+                    tracing::warn!("Could set up init using {}, error: {error}", init.name())
+                }
             };
-            tracing::info!("Could set up init using {}, error: {error}", init.name())
         }
 
-        Ok(())
+        Err(InstallError::NoInitSystemRecognized)
     }
 }
 
-impl<T: ToAssign, P: ToAssign> Install<P, builder::Set, T> {
-    pub fn remove(self) -> Result<(), RemoveError> {
+pub struct RemoveSteps(pub Vec<Box<dyn Step>>);
+impl<P: ToAssign, T: ToAssign, I: ToAssign> Install<P, builder::Set, T, I> {
+    pub fn prepare_remove(self) -> Result<RemoveSteps, RemoveError> {
         let builder::Install {
             mode,
-            path,
             name: Some(name),
-            working_dir,
-            description,
             ..
         } = self
         else {
-            unreachable!("type sys guarantees path and name set")
+            unreachable!("type sys guarantees name and trigger set")
         };
 
-        let source = std::env::current_exe().map_err(RemoveError::GetExeLocation)?;
-        let path = remove_files(&source, mode)?;
-
-        for init in INIT_SYSTEMS {
-            init.tear_down(&name);
+        if let Mode::System = mode {
+            if let sudo::RunningAs::User = sudo::check() {
+                return Err(RemoveError::NeedRoot);
+            }
         }
 
-        Ok(())
+        let mut inits = INIT_SYSTEMS.iter();
+        let (mut steps, path) = loop {
+            let Some(init) = inits.next() else {
+                return Err(RemoveError::NotInUse)
+            };
+
+            break init.tear_down_steps(&name, mode)?;
+        };
+
+        let remove_step = files::remove_files(path);
+        steps.push(Box::new(remove_step));
+        Ok(RemoveSteps(steps))
     }
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum MoveError {
-    #[error("could not find current users home dir")]
-    NoHome(#[from] NoHomeError),
-    #[error("none of the usual dirs for user binaries exist")]
-    UserDirNotAvailable,
-    #[error("none of the usual dirs for system binaries exist")]
-    SystemDirNotAvailable,
-    #[error("the path did not point to a binary")]
-    SourceNotFile,
-    #[error("could not move binary to install location: {0}")]
-    IO(#[from] std::io::Error),
-}
-
-fn system_dir() -> Option<PathBuf> {
-    let possible_paths: &[&'static Path] = &["/usr/bin/"].map(Path::new);
-
-    for path in possible_paths {
-        if path.parent().expect("never root").is_dir() {
-            return Some(path.to_path_buf());
-        }
-    }
-    None
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("Home directory not known")]
-struct NoHomeError;
-
-fn user_dir() -> Result<Option<PathBuf>, NoHomeError> {
-    let possible_paths: &[&'static Path] = &[".local/bin"].map(Path::new);
-
-    for relative in possible_paths {
-        let path = home::home_dir().ok_or(NoHomeError)?.join(relative);
-        if path.parent().expect("never root").is_dir() {
-            return Ok(Some(path));
-        }
-    }
-    Ok(None)
-}
-
-fn move_files(source: &Path, mode: Mode) -> Result<PathBuf, MoveError> {
-    let dir = match mode {
-        Mode::User => user_dir()?.ok_or(MoveError::UserDirNotAvailable)?,
-        Mode::System => system_dir().ok_or(MoveError::SystemDirNotAvailable)?,
-    };
-
-    let name = source.file_name().ok_or(MoveError::SourceNotFile)?;
-    let target = dir.join(name);
-    std::fs::copy(source, &target)?;
-    Ok(target)
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum DeleteError {
-    #[error("could not find current users home dir")]
-    NoHome(#[from] NoHomeError),
-    #[error("none of the usual dirs for user binaries exist")]
-    UserDirNotAvailable,
-    #[error("none of the usual dirs for system binaries exist")]
-    SystemDirNotAvailable,
-    #[error("the path did not point to a binary")]
-    SourceNotFile,
-    #[error("could not move binary to install location: {0}")]
-    IO(#[from] std::io::Error),
-}
-
-fn remove_files(source: &Path, mode: Mode) -> Result<PathBuf, DeleteError> {
-    let dir = match mode {
-        Mode::User => user_dir()?.ok_or(DeleteError::UserDirNotAvailable)?,
-        Mode::System => system_dir().ok_or(DeleteError::SystemDirNotAvailable)?,
-    };
-
-    let name = source.file_name().ok_or(DeleteError::SourceNotFile)?;
-    let target = dir.join(name);
-    std::fs::copy(source, &target)?;
-    Ok(target)
-}

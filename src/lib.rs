@@ -12,7 +12,9 @@ mod schedule;
 mod system;
 mod user;
 
-pub use install::InstallError;
 pub use install::Install;
+pub use install::InstallError;
+pub use install::Step;
+pub use install::Tense;
 
 pub use schedule::Schedule;
