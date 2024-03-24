@@ -1,3 +1,4 @@
+use crate::install::Rollback;
 use std::borrow::Cow;
 use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
@@ -11,7 +12,8 @@ use crate::install::init::{Params, SetupError, Steps};
 use crate::install::Mode;
 use crate::{Schedule, Step};
 
-use super::Error;
+use super::teardown::DisableTimer;
+use super::{teardown, Error};
 
 struct Service {
     unit: String,
@@ -20,15 +22,36 @@ struct Service {
 
 impl Step for Service {
     fn describe(&self, tense: crate::Tense) -> String {
-        todo!()
+        let verb = match tense {
+            crate::Tense::Past => "Wrote",
+            crate::Tense::Present => "Writing",
+            crate::Tense::Future => "Will write",
+        };
+        let path = self.path.display();
+        format!("{verb} systemd service unit to:\n\t{path}")
     }
 
-    fn perform(self) -> Result<(), Box<dyn std::error::Error>> {
-        let path = self.path;
-        write_unit(&path, &self.unit)
-            .map_err(|e| Error::Writing { e, path })
-            .map_err(Box::new)
-            .map_err(Into::into)
+    fn describe_detailed(&self, tense: crate::Tense) -> String {
+        let verb = match tense {
+            crate::Tense::Past => "Wrote",
+            crate::Tense::Present => "Writing",
+            crate::Tense::Future => "Will write",
+        };
+        let path = self.path.display();
+        let content = self.unit.replace("\n", "\n\t");
+        format!("{verb} systemd service unit to:\n\t{path}\ncontent:\n\t{content}")
+    }
+
+    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+        write_unit(&self.path, &self.unit)
+            .map_err(|e| Error::Writing {
+                e,
+                path: self.path.clone(),
+            })
+            .map_err(Box::new)?;
+        Ok(Some(Box::new(teardown::RemoveService {
+            path: self.path.clone(),
+        })))
     }
 }
 
@@ -39,15 +62,36 @@ struct Timer {
 
 impl Step for Timer {
     fn describe(&self, tense: crate::Tense) -> String {
-        todo!()
+        let verb = match tense {
+            crate::Tense::Past => "Wrote",
+            crate::Tense::Present => "Writing",
+            crate::Tense::Future => "Will write",
+        };
+        let path = self.path.display();
+        format!("{verb} systemd timer unit to:\n\t{path}")
     }
 
-    fn perform(self) -> Result<(), Box<dyn std::error::Error>> {
-        let path = self.path;
-        write_unit(&path, &self.unit)
-            .map_err(|e| Error::Writing { e, path })
-            .map_err(Box::new)
-            .map_err(Into::into)
+    fn describe_detailed(&self, tense: crate::Tense) -> String {
+        let verb = match tense {
+            crate::Tense::Past => "Wrote",
+            crate::Tense::Present => "Writing",
+            crate::Tense::Future => "Will write",
+        };
+        let path = self.path.display();
+        let content = self.unit.replace("\n", "\n\t");
+        format!("{verb} systemd timer unit to:\n\t{path}\ncontent:\n\t{content}")
+    }
+
+    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+        write_unit(&self.path, &self.unit)
+            .map_err(|e| Error::Writing {
+                e,
+                path: self.path.clone(),
+            })
+            .map_err(Box::new)?;
+        Ok(Some(Box::new(teardown::RemoveTimer {
+            path: self.path.clone(),
+        })))
     }
 }
 
@@ -58,15 +102,23 @@ struct EnableTimer {
 
 impl Step for EnableTimer {
     fn describe(&self, tense: crate::Tense) -> String {
-        todo!()
+        let verb = match tense {
+            crate::Tense::Past => "Enabled",
+            crate::Tense::Present => "Enabling",
+            crate::Tense::Future => "Will Enable",
+        };
+        format!("{verb} systemd {} timer: {}", self.mode, self.name)
     }
 
-    fn perform(self) -> Result<(), Box<dyn std::error::Error>> {
-        let name = self.name + ".timer";
+    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+        let name = self.name.clone() + ".timer";
         super::enable(&name, self.mode)
             .map_err(Error::SystemCtl)
-            .map_err(Box::new)
-            .map_err(Into::into)
+            .map_err(Box::new)?;
+        Ok(Some(Box::new(DisableTimer {
+            name: self.name.clone(),
+            mode: self.mode,
+        })))
     }
 }
 
@@ -77,15 +129,23 @@ struct EnableService {
 
 impl Step for EnableService {
     fn describe(&self, tense: crate::Tense) -> String {
-        todo!()
+        let verb = match tense {
+            crate::Tense::Past => "Enabled",
+            crate::Tense::Present => "Enabling",
+            crate::Tense::Future => "Will Enable",
+        };
+        format!("{verb} systemd {} service: {}", self.mode, self.name)
     }
 
-    fn perform(self) -> Result<(), Box<dyn std::error::Error>> {
-        let name = self.name + ".service";
+    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+        let name = self.name.clone() + ".service";
         super::enable(&name, self.mode)
             .map_err(Error::SystemCtl)
-            .map_err(Box::new)
-            .map_err(Into::into)
+            .map_err(Box::new)?;
+        Ok(Some(Box::new(teardown::DisableService {
+            name: self.name.clone(),
+            mode: self.mode,
+        })))
     }
 }
 
@@ -116,7 +176,7 @@ pub(crate) fn without_timer(
     let path = path_without_extension.with_extension("service");
     let create_service = Box::new(Service { unit, path });
 
-    let enable = Box::new(EnableTimer {
+    let enable = Box::new(EnableService {
         name: params.name.clone(),
         mode: params.mode,
     });
@@ -164,24 +224,23 @@ fn render_service(params: &Params) -> String {
 
     let comment = autogenerated_comment(params.bin_name);
     format!(
-        "{comment}
-            [Unit]
-            Description={description}
-            After=network.target
+        "{comment}\n
+[Unit]
+Description={description}
+After=network.target
 
-            [Service]
-            Type={ty}{working_dir_section}{user}
-            ExecStart={exe_path} {exe_args}
+[Service]
+Type={ty}{working_dir_section}{user}
+ExecStart={exe_path} {exe_args}
 
-            [Install]
-            WantedBy=multi-user.target
-            ",
+[Install]
+WantedBy=multi-user.target"
     )
 }
 
 fn autogenerated_comment(bin_name: &'static str) -> String {
     use super::{COMMENT_PREAMBLE, COMMENT_SUFFIX};
-    format!("{COMMENT_PREAMBLE}{bin_name}{COMMENT_SUFFIX}")
+    format!("{COMMENT_PREAMBLE}'{bin_name}'{COMMENT_SUFFIX}")
 }
 
 fn render_timer(params: &Params, schedule: &Schedule) -> String {
@@ -192,15 +251,18 @@ fn render_timer(params: &Params, schedule: &Schedule) -> String {
         }
     };
 
+    let comment = autogenerated_comment(params.bin_name);
     format!(
-        "[Unit]
-        Description={description}
-        [Timer]
-        OnCalendar={on_calander}
-        AccuracySec=60
-        [Install]
-        WantedBy=timers.target
-        "
+        "{comment}\n
+[Unit]
+Description={description}
+
+[Timer]
+OnCalendar={on_calander}
+AccuracySec=60
+
+[Install]
+WantedBy=timers.target"
     )
 }
 

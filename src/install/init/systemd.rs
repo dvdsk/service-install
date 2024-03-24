@@ -14,7 +14,7 @@ use std::{fs, io};
 use crate::install::builder::Trigger;
 use crate::install::files::NoHomeError;
 
-use super::{Mode, Params, SetupError, Steps, System, TearDownError};
+use super::{Mode, Params, SetupError, Steps, System, TearDownError, RSteps};
 
 mod setup;
 mod teardown;
@@ -45,12 +45,12 @@ pub enum Error {
     CheckingInitSys(io::Error),
 }
 
-const COMMENT_PREAMBLE: &str = "created by: ";
-const COMMENT_SUFFIX: &str = " during its installation, might get removed by it in the future. Remove this comment to prevent that";
+const COMMENT_PREAMBLE: &str = "# created by: ";
+const COMMENT_SUFFIX: &str = " during its installation\n# might get removed by it in the future.\n# Remove this comment to prevent that";
 
-pub struct Systemd {}
+pub struct SystemD {}
 
-impl System for Systemd {
+impl System for SystemD {
     fn name(&self) -> &'static str {
         "systemd"
     }
@@ -96,7 +96,7 @@ impl System for Systemd {
         }
     }
 
-    fn tear_down_steps(&self, name: &str, mode: Mode) -> Result<(Steps, PathBuf), TearDownError> {
+    fn tear_down_steps(&self, name: &str, mode: Mode) -> Result<(RSteps, PathBuf), TearDownError> {
         let without_extension = match mode {
             Mode::User => user_path()?,
             Mode::System => system_path(),
@@ -104,10 +104,17 @@ impl System for Systemd {
         .join(&name);
 
         let mut steps = Vec::new();
-        let service_path = without_extension.with_extension("service");
 
+        let timer_path = without_extension.with_extension("timer");
+        if our_service(&timer_path)? {
+            steps.extend(teardown::disable_then_remove_with_timer(
+                timer_path, name, mode,
+            ));
+        }
+
+        let service_path = without_extension.with_extension("service");
         let exe_path = if our_service(&service_path)? {
-            steps.extend(teardown::remove_then_disable_service(
+            steps.extend(teardown::disable_then_remove_service(
                 service_path.clone(),
                 name,
                 mode,
@@ -117,11 +124,6 @@ impl System for Systemd {
             return Err(TearDownError::NoService);
         };
 
-        let timer_path = without_extension.with_extension("timer");
-        if our_service(&timer_path)? {
-            steps.extend(teardown::remove_then_disable_timer(timer_path, name, mode));
-        }
-
         Ok((steps, exe_path))
     }
 }
@@ -130,8 +132,8 @@ impl System for Systemd {
 pub enum FindExeError {
     #[error("Could not read systemd unit file at: {path}, error: {err}")]
     ReadingUnit { err: std::io::Error, path: PathBuf },
-    #[error("ExecStart (use to find binary) is missing from file")]
-    ExecLineMissing,
+    #[error("ExecStart (use to find binary) is missing from servic unit at: {0}")]
+    ExecLineMissing(PathBuf),
     #[error("Path to binary extracted from systemd unit does not lead to a file, path: {0}")]
     ExacPathNotFile(PathBuf),
 }
@@ -139,13 +141,13 @@ pub enum FindExeError {
 fn exe_path(service_unit: PathBuf) -> Result<PathBuf, FindExeError> {
     let unit = std::fs::read_to_string(&service_unit).map_err(|err| FindExeError::ReadingUnit {
         err,
-        path: service_unit,
+        path: service_unit.clone(),
     })?;
     let path = unit
         .lines()
         .map(|l| l.trim())
-        .find_map(|l| l.strip_prefix("ExacStart="))
-        .ok_or(FindExeError::ExecLineMissing)?;
+        .find_map(|l| l.strip_prefix("ExecStart="))
+        .ok_or(FindExeError::ExecLineMissing(service_unit))?;
     let path = PathBuf::from_str(path).expect("infallible");
     if !path.is_file() {
         Err(FindExeError::ExacPathNotFile(path))

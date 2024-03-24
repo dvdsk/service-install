@@ -6,10 +6,14 @@ use crate::Schedule;
 
 use super::Mode;
 
+#[derive(Debug)]
 pub struct Set;
+#[derive(Debug)]
 pub struct NotSet;
 
+#[derive(Debug)]
 pub struct UserInstall;
+#[derive(Debug)]
 pub struct SystemInstall;
 
 pub trait ToAssign {}
@@ -27,6 +31,7 @@ pub(crate) enum Trigger {
     OnBoot,
 }
 
+#[derive(Debug)]
 pub struct Install<Path, Name, TriggerSet, InstallType>
 where
     Path: ToAssign,
@@ -121,8 +126,8 @@ where
     TriggerSet: ToAssign,
 {
     /// Only available for Install::system
-    pub fn run_as(mut self, user: String) -> Self {
-        self.run_as = Some(user);
+    pub fn run_as(mut self, user: impl Into<String>) -> Self {
+        self.run_as = Some(user.into());
         self
     }
 }

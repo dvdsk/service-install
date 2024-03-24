@@ -16,8 +16,16 @@ fn main() {
         .unwrap()
         .name("cli")
         .on_schedule(schedule)
+        .run_as("david")
+        .prepare_install()
+        .unwrap()
         .install()
         .unwrap();
 
-    install_system!().name("cli").remove().unwrap();
+    install_system!()
+        .name("cli")
+        .prepare_remove()
+        .unwrap()
+        .remove()
+        .unwrap();
 }

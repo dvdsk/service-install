@@ -1,9 +1,10 @@
 use std::ffi::OsString;
-use std::fs::File;
-use std::io::Read;
+use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::{Mode, Step, Tense};
+use crate::RemoveStep;
+
+use super::{Mode, Rollback, Step, Tense};
 
 #[derive(thiserror::Error, Debug)]
 pub enum MoveError {
@@ -27,6 +28,7 @@ fn system_dir() -> Option<PathBuf> {
             return Some(path.to_path_buf());
         }
     }
+
     None
 }
 
@@ -53,7 +55,12 @@ pub(crate) struct Move {
 }
 
 impl Step for Move {
-    fn describe(&self, tense: Tense) -> String {
+    fn describe_detailed(&self, tense: Tense) -> String {
+        let verb = match tense {
+            Tense::Past => "Copied",
+            Tense::Present => "Copying",
+            Tense::Future => "Will copy",
+        };
         let name = self.name.to_string_lossy();
         let source = self
             .source
@@ -65,20 +72,75 @@ impl Step for Move {
             .parent()
             .expect("path points to file, so has parent")
             .display();
-        match tense {
-            Tense::Past => format!("Moved {name} from {source} to {target}"),
-            Tense::Present => format!("Moving {name} from {source} to {target}"),
-            Tense::Future => format!("Will move {name} from {source} to {target}"),
-        }
+        format!("{verb} executable `{name}` from:\n\t{source}\nto:\n\t{target}")
     }
 
-    fn perform(self) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::copy(self.source, self.target)?;
-        Ok(())
+    fn describe(&self, tense: Tense) -> String {
+        let verb = match tense {
+            Tense::Past => "Copied",
+            Tense::Present => "Copying",
+            Tense::Future => "Will copy",
+        };
+        let name = self.name.to_string_lossy();
+        let target = self
+            .target
+            .parent()
+            .expect("path points to file, so has parent")
+            .display();
+        format!("{verb} executable `{name}` to:\n\t{target}")
+    }
+
+    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+        std::fs::copy(&self.source, &self.target)?;
+        Ok(Some(Box::new(Remove {
+            target: self.target.clone(),
+        })))
     }
 }
 
-pub(crate) fn move_files(source: PathBuf, mode: Mode) -> Result<Move, MoveError> {
+struct SetRootOwner {
+    path: PathBuf,
+}
+
+impl Step for SetRootOwner {
+    fn describe(&self, tense: Tense) -> String {
+        let verb = match tense {
+            Tense::Past => "Set",
+            Tense::Present => "Setting",
+            Tense::Future => "Will set",
+        };
+        format!("{verb} executables owner to root")
+    }
+
+    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+        const ROOT: u32 = 0;
+        std::os::unix::fs::chown(&self.path, Some(ROOT), Some(ROOT))?;
+        Ok(None)
+    }
+}
+
+struct SetReadOnly {
+    path: PathBuf,
+}
+
+impl Step for SetReadOnly {
+    fn describe(&self, tense: Tense) -> String {
+        let verb = match tense {
+            Tense::Past => "Set",
+            Tense::Present => "Setting",
+            Tense::Future => "Will set",
+        };
+        format!("{verb} executables permissions to read only")
+    }
+
+    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+        fs::metadata(&self.path)?.permissions().set_readonly(true);
+        Ok(None)
+    }
+}
+
+type Steps = Vec<Box<dyn Step>>;
+pub(crate) fn move_files(source: PathBuf, mode: Mode) -> Result<(Steps, PathBuf), MoveError> {
     let dir = match mode {
         Mode::User => user_dir()?.ok_or(MoveError::UserDirNotAvailable)?,
         Mode::System => system_dir().ok_or(MoveError::SystemDirNotAvailable)?,
@@ -89,11 +151,24 @@ pub(crate) fn move_files(source: PathBuf, mode: Mode) -> Result<Move, MoveError>
         .ok_or(MoveError::SourceNotFile)?
         .to_owned();
     let target = dir.join(&name);
-    Ok(Move {
-        name,
-        source,
-        target,
-    })
+
+    let mut steps = vec![
+        Box::new(Move {
+            name,
+            source,
+            target: target.clone(),
+        }) as Box<dyn Step>,
+        Box::new(SetReadOnly {
+            path: target.clone(),
+        }),
+    ];
+    if let Mode::System = mode {
+        steps.push(Box::new(SetRootOwner {
+            path: target.clone(),
+        }));
+    }
+
+    Ok((steps, target))
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -121,13 +196,28 @@ pub(crate) struct Remove {
     target: PathBuf,
 }
 
-impl Step for Remove {
+impl RemoveStep for Remove {
     fn describe(&self, tense: Tense) -> String {
-        todo!()
+        let verb = match tense {
+            crate::Tense::Past => "Removed",
+            crate::Tense::Present => "Removing",
+            crate::Tense::Future => "Will remove",
+        };
+        let bin = self
+            .target
+            .file_name()
+            .expect("In fn exe_path we made sure target is a file")
+            .to_string_lossy();
+        let dir = self
+            .target
+            .parent()
+            .expect("There is always a parent on linux")
+            .display();
+        format!("{verb} installed executable `{bin}` at:\n\t{dir}")
     }
 
-    fn perform(self) -> Result<(), Box<dyn std::error::Error>> {
-        std::fs::remove_file(self.target)
+    fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::remove_file(&self.target)
             .map_err(DeleteError::IO)
             .map_err(Box::new)
             .map_err(Into::into)
@@ -136,35 +226,4 @@ impl Step for Remove {
 
 pub(crate) fn remove_files(installed: PathBuf) -> Remove {
     Remove { target: installed }
-}
-
-fn files_equal(a: &Path, b: &Path) -> Result<bool, std::io::Error> {
-    let mut a = File::open(a)?;
-    let mut b = File::open(b)?;
-    let mut buf_a = [0; 40_000];
-    let mut buf_b = [0; 40_000];
-
-    loop {
-        let mut a_read = a.read(&mut buf_a)?;
-        let mut b_read = b.read(&mut buf_b)?;
-
-        if a_read > b_read {
-            // should be rare
-            b_read += b.read(&mut buf_b[b_read..a_read])?;
-        } else if a_read < b_read {
-            a_read += a.read(&mut buf_a[a_read..b_read])?;
-        }
-
-        let different_size = a_read != b_read;
-        let different_content = buf_a.into_iter().zip(buf_b).any(|(a, b)| a != b);
-
-        if different_size || different_content {
-            return Ok(false);
-        }
-
-        if a_read == 0 {
-            assert_eq!(b_read, 0);
-            return Ok(true);
-        }
-    }
 }

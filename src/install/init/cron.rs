@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::install::Mode;
 
-use super::{Params, SetupError, Steps, System, TearDownError};
+use super::{Params, SetupError, Steps, System, TearDownError, RSteps};
 
 pub struct Cron;
 
@@ -16,7 +16,7 @@ impl System for Cron {
     fn set_up_steps(&self, _params: &Params) -> Result<Steps, SetupError> {
         todo!()
     }
-    fn tear_down_steps(&self, _params: &str, _: Mode) -> Result<(Steps, PathBuf), TearDownError> {
+    fn tear_down_steps(&self, _params: &str, _: Mode) -> Result<(RSteps, PathBuf), TearDownError> {
         todo!()
     }
 }

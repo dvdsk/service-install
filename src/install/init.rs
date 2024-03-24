@@ -1,23 +1,25 @@
+use std::path::PathBuf;
+
 mod cron;
 mod systemd;
 
-use std::path::PathBuf;
-
 pub use cron::Cron;
+pub use systemd::{SystemD, FindExeError};
 
-use self::systemd::FindExeError;
+use crate::RemoveStep;
 
 use super::builder::Trigger;
 use super::files::NoHomeError;
 use super::{Mode, Step};
 
 type Steps = Vec<Box<dyn Step>>;
+type RSteps = Vec<Box<dyn RemoveStep>>;
 
 pub trait System {
     fn name(&self) -> &'static str;
     fn not_available(&self) -> Result<bool, SetupError>;
     fn set_up_steps(&self, params: &Params) -> Result<Steps, SetupError>;
-    fn tear_down_steps(&self, name: &str, mode: Mode) -> Result<(Steps, PathBuf), TearDownError>;
+    fn tear_down_steps(&self, name: &str, mode: Mode) -> Result<(RSteps, PathBuf), TearDownError>;
 }
 
 #[derive(thiserror::Error, Debug)]

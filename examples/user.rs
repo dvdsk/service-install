@@ -11,13 +11,24 @@ fn main() {
         .init();
 
     let schedule = Schedule::Daily(Time::from_hms(10, 10, 10).unwrap());
-    install_user!()
+    let done = install_user!()
         .current_exe()
         .unwrap()
         .name("cli")
         .on_schedule(schedule)
+        .prepare_install()
+        .unwrap()
         .install()
         .unwrap();
 
-    install_user!().name("cli").remove().unwrap();
+    println!("Install complete, did: \n{done}");
+
+    let done = install_user!()
+        .name("cli")
+        .prepare_remove()
+        .unwrap()
+        .remove()
+        .unwrap();
+
+    println!("Remove complete, did: \n{done}")
 }

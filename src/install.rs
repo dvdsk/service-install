@@ -1,6 +1,8 @@
 mod builder;
-mod init;
 mod files;
+mod init;
+
+use std::fmt::Display;
 
 pub use builder::Install;
 
@@ -10,6 +12,15 @@ use self::builder::ToAssign;
 pub enum Mode {
     User,
     System,
+}
+
+impl Display for Mode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Mode::User => f.write_str("user"),
+            Mode::System => f.write_str("system"),
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -22,6 +33,8 @@ pub enum InstallError {
     NeedRoot,
     #[error("Could not find an init system we can set things up for")]
     NoInitSystemRecognized,
+    #[error("Install configured to run as a user: `{0}` however this user does not exist")]
+    UserDoesNotExists(String),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -51,11 +64,58 @@ pub enum Tense {
 
 pub trait Step {
     fn describe(&self, tense: Tense) -> String;
-    fn perform(self) -> Result<(), Box<dyn std::error::Error>>;
+    fn describe_detailed(&self, tense: Tense) -> String {
+        self.describe(tense)
+    }
+    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>>;
 }
 
-const INIT_SYSTEMS: [&dyn init::System; 1] = [/* &Systemd {}, */ &init::Cron {}];
+pub trait RemoveStep {
+    fn describe(&self, tense: Tense) -> String;
+    fn describe_detailed(&self, tense: Tense) -> String {
+        self.describe(tense)
+    }
+    fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>>;
+}
+
+pub trait Rollback {
+    fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>>;
+    fn describe(&self) -> String;
+}
+
+impl<T: RemoveStep> Rollback for T {
+    fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.perform()
+    }
+
+    fn describe(&self) -> String {
+        self.describe(Tense::Past)
+    }
+}
+
+const INIT_SYSTEMS: [&dyn init::System; 2] = [&init::SystemD {}, &init::Cron {}];
 pub struct InstallSteps(pub Vec<Box<dyn Step>>);
+
+impl IntoIterator for InstallSteps {
+    type Item = Box<dyn Step>;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl InstallSteps {
+    pub fn install(self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut description = Vec::new();
+        for mut step in self.0 {
+            description.push(step.describe(Tense::Past));
+            step.perform()?;
+        }
+
+        Ok(description.join("\n"))
+    }
+}
 
 impl<T: ToAssign> Install<builder::Set, builder::Set, builder::Set, T> {
     pub fn prepare_install(self) -> Result<InstallSteps, InstallError> {
@@ -81,11 +141,13 @@ impl<T: ToAssign> Install<builder::Set, builder::Set, builder::Set, T> {
             }
         }
 
-        let move_step = files::move_files(source, mode)?;
-        let exe_path = move_step.target.clone();
+        if let Some(ref user) = run_as {
+            if !crate::util::user_exists(&user).unwrap_or(true) {
+                return Err(InstallError::UserDoesNotExists(user.clone()));
+            }
+        }
 
-        let mut steps = vec![Box::new(move_step) as Box<dyn Step>];
-
+        let (mut steps, exe_path) = files::move_files(source, mode)?;
         let params = init::Params {
             name,
             bin_name,
@@ -120,7 +182,29 @@ impl<T: ToAssign> Install<builder::Set, builder::Set, builder::Set, T> {
     }
 }
 
-pub struct RemoveSteps(pub Vec<Box<dyn Step>>);
+pub struct RemoveSteps(pub Vec<Box<dyn RemoveStep>>);
+
+impl IntoIterator for RemoveSteps {
+    type Item = Box<dyn RemoveStep>;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl RemoveSteps {
+    pub fn remove(self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut description = Vec::new();
+        for mut step in self.0 {
+            description.push(step.describe(Tense::Past));
+            step.perform()?;
+        }
+
+        Ok(description.join("\n"))
+    }
+}
+
 impl<P: ToAssign, T: ToAssign, I: ToAssign> Install<P, builder::Set, T, I> {
     pub fn prepare_remove(self) -> Result<RemoveSteps, RemoveError> {
         let builder::Install {
@@ -141,7 +225,7 @@ impl<P: ToAssign, T: ToAssign, I: ToAssign> Install<P, builder::Set, T, I> {
         let mut inits = INIT_SYSTEMS.iter();
         let (mut steps, path) = loop {
             let Some(init) = inits.next() else {
-                return Err(RemoveError::NotInUse)
+                return Err(RemoveError::NotInUse);
             };
 
             break init.tear_down_steps(&name, mode)?;
@@ -152,4 +236,3 @@ impl<P: ToAssign, T: ToAssign, I: ToAssign> Install<P, builder::Set, T, I> {
         Ok(RemoveSteps(steps))
     }
 }
-

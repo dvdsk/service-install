@@ -9,12 +9,11 @@
 mod error;
 mod install;
 mod schedule;
-mod system;
-mod user;
+mod util;
 
 pub use install::Install;
 pub use install::InstallError;
-pub use install::Step;
+pub use install::{Step, RemoveStep};
 pub use install::Tense;
 
 pub use schedule::Schedule;
