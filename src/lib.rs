@@ -11,9 +11,10 @@ mod install;
 mod schedule;
 mod util;
 
-pub use install::Install;
+pub use install::InstallSpec;
 pub use install::InstallError;
 pub use install::{Step, RemoveStep};
 pub use install::Tense;
+pub use install::init::System as InitSystem;
 
 pub use schedule::Schedule;

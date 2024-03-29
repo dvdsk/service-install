@@ -37,7 +37,7 @@ fn system_dir() -> Option<PathBuf> {
 pub struct NoHomeError;
 
 fn user_dir() -> Result<Option<PathBuf>, NoHomeError> {
-    let possible_paths: &[&'static Path] = &[".local/bin"].map(Path::new);
+    let possible_paths: &[&'static Path] = &[".local/hi bin"].map(Path::new);
 
     for relative in possible_paths {
         let path = home::home_dir().ok_or(NoHomeError)?.join(relative);
@@ -72,7 +72,7 @@ impl Step for Move {
             .parent()
             .expect("path points to file, so has parent")
             .display();
-        format!("{verb} executable `{name}` from:\n\t{source}\nto:\n\t{target}")
+        format!("{verb} executable `{name}`\n| from:\n|\t{source}\n| to:\n|\t{target}")
     }
 
     fn describe(&self, tense: Tense) -> String {
@@ -126,11 +126,11 @@ struct SetReadOnly {
 impl Step for SetReadOnly {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            Tense::Past => "Set",
-            Tense::Present => "Setting",
-            Tense::Future => "Will set",
+            Tense::Past => "Made",
+            Tense::Present => "Making",
+            Tense::Future => "Will make",
         };
-        format!("{verb} executables permissions to read only")
+        format!("{verb} the executable read only")
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {

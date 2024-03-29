@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use crate::Schedule;
 
-use super::Mode;
+use super::{init, Mode};
 
 #[derive(Debug)]
 pub struct Set;
@@ -25,6 +25,7 @@ impl ToAssign for NotSet {}
 impl ToAssign for SystemInstall {}
 impl ToAssign for UserInstall {}
 
+
 #[derive(Debug, Clone)]
 pub(crate) enum Trigger {
     OnSchedule(Schedule),
@@ -32,7 +33,7 @@ pub(crate) enum Trigger {
 }
 
 #[derive(Debug)]
-pub struct Install<Path, Name, TriggerSet, InstallType>
+pub struct InstallSpec<Path, Name, TriggerSet, InstallType>
 where
     Path: ToAssign,
     Name: ToAssign,
@@ -48,6 +49,8 @@ where
     pub(crate) run_as: Option<String>,
     pub(crate) args: Vec<String>,
     pub(crate) bin_name: &'static str,
+    /// None means all
+    pub(crate) init_systems: Option<Vec<init::System>>,
 
     pub(crate) path_set: PhantomData<Path>,
     pub(crate) name_set: PhantomData<Name>,
@@ -58,25 +61,25 @@ where
 #[macro_export]
 macro_rules! install_system {
     () => {
-        service_install::Install::__dont_use_use_the_macro_system(env!("CARGO_BIN_NAME"))
+        service_install::InstallSpec::__dont_use_use_the_macro_system(env!("CARGO_BIN_NAME"))
     };
 }
 
 #[macro_export]
 macro_rules! install_user {
     () => {
-        service_install::Install::__dont_use_use_the_macro_user(env!("CARGO_BIN_NAME"))
+        service_install::InstallSpec::__dont_use_use_the_macro_user(env!("CARGO_BIN_NAME"))
     };
 }
 
-impl Install<NotSet, NotSet, NotSet, NotSet> {
+impl InstallSpec<NotSet, NotSet, NotSet, NotSet> {
     #[doc(hidden)]
     #[must_use]
     /// This is an implementation detail and *should not* be called directly!
     pub fn __dont_use_use_the_macro_system(
         bin_name: &'static str,
-    ) -> Install<NotSet, NotSet, NotSet, SystemInstall> {
-        Install {
+    ) -> InstallSpec<NotSet, NotSet, NotSet, SystemInstall> {
+        InstallSpec {
             mode: Mode::System,
             path: None,
             name: None,
@@ -86,6 +89,7 @@ impl Install<NotSet, NotSet, NotSet, NotSet> {
             run_as: None,
             args: Vec::new(),
             bin_name,
+            init_systems: None,
 
             path_set: PhantomData {},
             name_set: PhantomData {},
@@ -99,8 +103,8 @@ impl Install<NotSet, NotSet, NotSet, NotSet> {
     /// This is an implementation detail and *should not* be called directly!
     pub fn __dont_use_use_the_macro_user(
         bin_name: &'static str,
-    ) -> Install<NotSet, NotSet, NotSet, UserInstall> {
-        Install {
+    ) -> InstallSpec<NotSet, NotSet, NotSet, UserInstall> {
+        InstallSpec {
             mode: Mode::User,
             path: None,
             name: None,
@@ -110,6 +114,7 @@ impl Install<NotSet, NotSet, NotSet, NotSet> {
             run_as: None,
             args: Vec::new(),
             bin_name,
+            init_systems: None,
 
             path_set: PhantomData {},
             name_set: PhantomData {},
@@ -119,7 +124,7 @@ impl Install<NotSet, NotSet, NotSet, NotSet> {
     }
 }
 
-impl<Path, Name, TriggerSet> Install<Path, Name, TriggerSet, SystemInstall>
+impl<Path, Name, TriggerSet> InstallSpec<Path, Name, TriggerSet, SystemInstall>
 where
     Path: ToAssign,
     Name: ToAssign,
@@ -132,7 +137,7 @@ where
     }
 }
 
-impl<Path, Name, TriggerSet, InstallType> Install<Path, Name, TriggerSet, InstallType>
+impl<Path, Name, TriggerSet, InstallType> InstallSpec<Path, Name, TriggerSet, InstallType>
 where
     Path: ToAssign,
     Name: ToAssign,
@@ -140,8 +145,8 @@ where
     InstallType: ToAssign,
 {
     #[must_use]
-    pub fn path(self, path: impl Into<PathBuf>) -> Install<Set, Name, TriggerSet, InstallType> {
-        Install {
+    pub fn path(self, path: impl Into<PathBuf>) -> InstallSpec<Set, Name, TriggerSet, InstallType> {
+        InstallSpec {
             mode: self.mode,
             path: Some(path.into()),
             name: self.name,
@@ -151,6 +156,7 @@ where
             run_as: self.run_as,
             args: self.args,
             bin_name: self.bin_name,
+            init_systems: self.init_systems,
 
             path_set: PhantomData {},
             name_set: PhantomData {},
@@ -162,8 +168,8 @@ where
     #[must_use]
     pub fn current_exe(
         self,
-    ) -> Result<Install<Set, Name, TriggerSet, InstallType>, std::io::Error> {
-        Ok(Install {
+    ) -> Result<InstallSpec<Set, Name, TriggerSet, InstallType>, std::io::Error> {
+        Ok(InstallSpec {
             mode: self.mode,
             path: Some(std::env::current_exe()?),
             name: self.name,
@@ -173,6 +179,7 @@ where
             run_as: self.run_as,
             args: self.args,
             bin_name: self.bin_name,
+            init_systems: self.init_systems,
 
             path_set: PhantomData {},
             name_set: PhantomData {},
@@ -182,8 +189,8 @@ where
     }
 
     #[must_use]
-    pub fn name(self, name: impl Display) -> Install<Path, Set, TriggerSet, InstallType> {
-        Install {
+    pub fn name(self, name: impl Display) -> InstallSpec<Path, Set, TriggerSet, InstallType> {
+        InstallSpec {
             mode: self.mode,
             path: self.path,
             name: Some(name.to_string()),
@@ -193,6 +200,7 @@ where
             run_as: self.run_as,
             args: self.args,
             bin_name: self.bin_name,
+            init_systems: self.init_systems,
 
             path_set: PhantomData {},
             name_set: PhantomData {},
@@ -202,8 +210,8 @@ where
     }
 
     #[must_use]
-    pub fn on_schedule(self, schedule: Schedule) -> Install<Path, Name, Set, InstallType> {
-        Install {
+    pub fn on_schedule(self, schedule: Schedule) -> InstallSpec<Path, Name, Set, InstallType> {
+        InstallSpec {
             mode: self.mode,
             path: self.path,
             name: self.name,
@@ -213,6 +221,7 @@ where
             run_as: self.run_as,
             args: self.args,
             bin_name: self.bin_name,
+            init_systems: self.init_systems,
 
             path_set: PhantomData {},
             name_set: PhantomData {},
@@ -222,8 +231,8 @@ where
     }
 
     #[must_use]
-    pub fn on_boot(self) -> Install<Path, Name, Set, InstallType> {
-        Install {
+    pub fn on_boot(self) -> InstallSpec<Path, Name, Set, InstallType> {
+        InstallSpec {
             mode: self.mode,
             path: self.path,
             name: self.name,
@@ -233,6 +242,7 @@ where
             run_as: self.run_as,
             args: self.args,
             bin_name: self.bin_name,
+            init_systems: self.init_systems,
 
             path_set: PhantomData {},
             name_set: PhantomData {},
@@ -257,6 +267,17 @@ where
     #[must_use]
     pub fn working_dir(mut self, dir: PathBuf) -> Self {
         self.working_dir = Some(dir);
+        self
+    }
+
+    /// By default all supported init systems will be tried
+    /// Can be set multiple times to try multiple init systems in the
+    /// order in which this was set.
+    ///
+    /// Note: setting this for an uninstall might cause it to fail
+    #[must_use]
+    pub fn allowed_inits(mut self, allowed: impl AsRef<[init::System]>) -> Self {
+        self.init_systems = Some(allowed.as_ref().to_vec());
         self
     }
 }

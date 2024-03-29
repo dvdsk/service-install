@@ -14,7 +14,7 @@ use std::{fs, io};
 use crate::install::builder::Trigger;
 use crate::install::files::NoHomeError;
 
-use super::{Mode, Params, SetupError, Steps, System, TearDownError, RSteps};
+use super::{ExeLocation, Mode, Params, RSteps, SetupError, Steps, TearDownError};
 
 mod setup;
 mod teardown;
@@ -45,87 +45,82 @@ pub enum Error {
     CheckingInitSys(io::Error),
 }
 
-const COMMENT_PREAMBLE: &str = "# created by: ";
-const COMMENT_SUFFIX: &str = " during its installation\n# might get removed by it in the future.\n# Remove this comment to prevent that";
+// check if systemd is the init system (pid 1)
+pub(super) fn not_available() -> Result<bool, SetupError> {
+    use sysinfo::{Pid, ProcessRefreshKind, System, UpdateKind};
+    let mut s = System::new();
+    s.refresh_pids_specifics(
+        &[Pid::from(1)],
+        ProcessRefreshKind::new().with_cmd(UpdateKind::Always),
+    );
+    let init_sys = &s
+        .process(Pid::from(1))
+        .expect("there should always be an init system")
+        .cmd()[0];
+    let init_path = Path::new(init_sys.as_str())
+        .canonicalize()
+        .map_err(Error::CheckingInitSys)?;
 
-pub struct SystemD {}
+    Ok(!init_path
+        .components()
+        .filter_map(|c| match c {
+            Component::Normal(cmp) => Some(cmp),
+            _other => None,
+        })
+        .filter_map(|c| c.to_str())
+        .any(|c| c == "systemd"))
+}
 
-impl System for SystemD {
-    fn name(&self) -> &'static str {
-        "systemd"
+pub(super) fn set_up_steps(params: &Params) -> Result<Steps, SetupError> {
+    let path_without_extension = match params.mode {
+        Mode::User => user_path()?,
+        Mode::System => system_path(),
+    }
+    .join(&params.name);
+
+    match params.trigger {
+        Trigger::OnSchedule(ref schedule) => {
+            setup::with_timer(path_without_extension, params, schedule)
+        }
+        Trigger::OnBoot => setup::without_timer(path_without_extension, params),
+    }
+}
+
+pub(super) fn tear_down_steps(
+    name: &str,
+    mode: Mode,
+) -> Result<Option<(RSteps, ExeLocation)>, TearDownError> {
+    let without_extension = match mode {
+        Mode::User => user_path()?,
+        Mode::System => system_path(),
+    }
+    .join(&name);
+
+    let mut steps = Vec::new();
+
+    let timer_path = without_extension.with_extension("timer");
+    let has_timer = our_service(&timer_path)?;
+    if has_timer {
+        steps.extend(teardown::disable_then_remove_with_timer(
+            timer_path, name, mode,
+        ));
     }
 
-    // check if systemd is the init system (pid 1)
-    fn not_available(&self) -> Result<bool, SetupError> {
-        use sysinfo::{Pid, ProcessRefreshKind, System, UpdateKind};
-        let mut s = System::new();
-        s.refresh_pids_specifics(
-            &[Pid::from(1)],
-            ProcessRefreshKind::new().with_cmd(UpdateKind::Always),
-        );
-        let init_sys = &s
-            .process(Pid::from(1))
-            .expect("there should always be an init system")
-            .cmd()[0];
-        let init_path = Path::new(init_sys.as_str())
-            .canonicalize()
-            .map_err(Error::CheckingInitSys)?;
+    let service_path = without_extension.with_extension("service");
+    let exe_path = if our_service(&service_path)? {
+        steps.extend(teardown::disable_then_remove_service(
+            service_path.clone(),
+            name,
+            mode,
+        ));
+        exe_path(service_path).map_err(TearDownError::FindingExePath)?
+    } else if has_timer {
+        return Err(TearDownError::TimerWithoutService);
+    } else {
+        return Ok(None);
+    };
 
-        Ok(!init_path
-            .components()
-            .filter_map(|c| match c {
-                Component::Normal(cmp) => Some(cmp),
-                _other => None,
-            })
-            .filter_map(|c| c.to_str())
-            .any(|c| c == "systemd"))
-    }
-
-    fn set_up_steps(&self, params: &Params) -> Result<Steps, SetupError> {
-        let path_without_extension = match params.mode {
-            Mode::User => user_path()?,
-            Mode::System => system_path(),
-        }
-        .join(&params.name);
-
-        match params.trigger {
-            Trigger::OnSchedule(ref schedule) => {
-                setup::with_timer(path_without_extension, params, schedule)
-            }
-            Trigger::OnBoot => setup::without_timer(path_without_extension, params),
-        }
-    }
-
-    fn tear_down_steps(&self, name: &str, mode: Mode) -> Result<(RSteps, PathBuf), TearDownError> {
-        let without_extension = match mode {
-            Mode::User => user_path()?,
-            Mode::System => system_path(),
-        }
-        .join(&name);
-
-        let mut steps = Vec::new();
-
-        let timer_path = without_extension.with_extension("timer");
-        if our_service(&timer_path)? {
-            steps.extend(teardown::disable_then_remove_with_timer(
-                timer_path, name, mode,
-            ));
-        }
-
-        let service_path = without_extension.with_extension("service");
-        let exe_path = if our_service(&service_path)? {
-            steps.extend(teardown::disable_then_remove_service(
-                service_path.clone(),
-                name,
-                mode,
-            ));
-            exe_path(service_path).map_err(TearDownError::FindingExePath)?
-        } else {
-            return Err(TearDownError::NoService);
-        };
-
-        Ok((steps, exe_path))
-    }
+    Ok(Some((steps, exe_path)))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -172,7 +167,7 @@ fn our_service(service_path: &Path) -> Result<bool, Error> {
         Err(e) if e.kind() == ErrorKind::NotFound => return Ok(false),
         Err(e) => return Err(Error::Verifying(e)),
     };
-
+    use super::{COMMENT_PREAMBLE, COMMENT_SUFFIX};
     return Ok(service.contains(COMMENT_PREAMBLE) && service.contains(COMMENT_SUFFIX));
 }
 

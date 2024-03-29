@@ -1,10 +1,10 @@
 mod builder;
 mod files;
-mod init;
+pub mod init;
 
 use std::fmt::Display;
 
-pub use builder::Install;
+pub use builder::InstallSpec;
 
 use self::builder::ToAssign;
 
@@ -46,7 +46,7 @@ pub enum RemoveError {
     #[error("Removing from init system: {0}")]
     Init(#[from] init::TearDownError),
     #[error("Could not find any installation in any init system")]
-    NotInUse,
+    NoInstallFound,
     #[error("Need to run as root to remove a system install")]
     NeedRoot,
 }
@@ -93,7 +93,6 @@ impl<T: RemoveStep> Rollback for T {
     }
 }
 
-const INIT_SYSTEMS: [&dyn init::System; 2] = [&init::SystemD {}, &init::Cron {}];
 pub struct InstallSteps(pub Vec<Box<dyn Step>>);
 
 impl IntoIterator for InstallSteps {
@@ -117,9 +116,9 @@ impl InstallSteps {
     }
 }
 
-impl<T: ToAssign> Install<builder::Set, builder::Set, builder::Set, T> {
+impl<T: ToAssign> InstallSpec<builder::Set, builder::Set, builder::Set, T> {
     pub fn prepare_install(self) -> Result<InstallSteps, InstallError> {
-        let builder::Install {
+        let builder::InstallSpec {
             mode,
             path: Some(source),
             name: Some(name),
@@ -162,7 +161,11 @@ impl<T: ToAssign> Install<builder::Set, builder::Set, builder::Set, T> {
             mode,
         };
 
-        for init in INIT_SYSTEMS {
+        for init in self
+            .init_systems
+            .unwrap_or_else(|| init::System::all())
+            .into_iter()
+        {
             if init.not_available().map_err(InstallError::Init)? {
                 continue;
             }
@@ -205,11 +208,12 @@ impl RemoveSteps {
     }
 }
 
-impl<P: ToAssign, T: ToAssign, I: ToAssign> Install<P, builder::Set, T, I> {
+impl<P: ToAssign, T: ToAssign, I: ToAssign> InstallSpec<P, builder::Set, T, I> {
     pub fn prepare_remove(self) -> Result<RemoveSteps, RemoveError> {
-        let builder::Install {
+        let builder::InstallSpec {
             mode,
             name: Some(name),
+            bin_name,
             ..
         } = self
         else {
@@ -222,13 +226,15 @@ impl<P: ToAssign, T: ToAssign, I: ToAssign> Install<P, builder::Set, T, I> {
             }
         }
 
-        let mut inits = INIT_SYSTEMS.iter();
+        let mut inits = self.init_systems.unwrap_or(init::System::all()).into_iter();
         let (mut steps, path) = loop {
             let Some(init) = inits.next() else {
-                return Err(RemoveError::NotInUse);
+                return Err(RemoveError::NoInstallFound);
             };
 
-            break init.tear_down_steps(&name, mode)?;
+            if let Some(install) = init.tear_down_steps(&name, bin_name, mode)? {
+                break install;
+            }
         };
 
         let remove_step = files::remove_files(path);
