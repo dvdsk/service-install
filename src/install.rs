@@ -191,7 +191,10 @@ impl<T: ToAssign> InstallSpec<builder::Set, builder::Set, builder::Set, T> {
                     return Ok(InstallSteps(steps));
                 }
                 Err(error) => {
-                    tracing::warn!("Could set up init using {}, error: {error}", init.name())
+                    tracing::warn!(
+                        "Could not set up init using {}, error: {error}",
+                        init.name()
+                    )
                 }
             };
         }

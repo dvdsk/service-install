@@ -15,12 +15,10 @@ pub(super) fn not_available() -> Result<bool, SetupError> {
     use sysinfo::{ProcessRefreshKind, System, UpdateKind};
     let mut s = System::new();
     s.refresh_processes_specifics(ProcessRefreshKind::new().with_cmd(UpdateKind::Always));
-    let cron_running = s.processes().iter().any(|(_, process)| {
-        process
-            .cmd()
-            .iter()
-            .any(|part| part.ends_with("/cron"))
-    });
+    let cron_running = s
+        .processes()
+        .iter()
+        .any(|(_, process)| process.cmd().iter().any(|part| part.ends_with("/cron")));
     Ok(!cron_running)
 }
 
@@ -80,7 +78,7 @@ fn crontab_lines(text: String) -> Vec<Line> {
 pub enum GetCrontabError {
     #[error("Could not run the crontab program: {0}")]
     CouldNotRun(std::io::Error),
-    #[error("Command `crontab -l` failed, stderr:\n\t")]
+    #[error("Command `crontab -l` failed, stderr: \"{stderr}\"\n\t")]
     CommandFailed { stderr: String },
 }
 
@@ -100,7 +98,15 @@ fn current_crontab(user: Option<&str>) -> Result<Vec<Line>, GetCrontabError> {
         return Ok(crontab);
     }
 
-    let stderr = String::from_utf8(output.stderr).expect("crontab should return utf8");
+    let stderr = String::from_utf8(output.stderr)
+        .expect("crontab should return utf8")
+        .trim()
+        .to_string();
+
+    if stderr.starts_with("no crontab for") {
+        return Ok(Vec::new());
+    }
+
     Err(GetCrontabError::CommandFailed { stderr })
 }
 

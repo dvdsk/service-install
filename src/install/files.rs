@@ -28,7 +28,6 @@ fn system_dir() -> Option<PathBuf> {
             return Some(path.to_path_buf());
         }
     }
-
     None
 }
 
@@ -119,6 +118,14 @@ impl Step for SetRootOwner {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum SetReadOnlyError {
+    #[error("Could not get current permissions for file, error: {0}")]
+    GetPermissions(std::io::Error),
+    #[error("Could not set permissions for file, error: {0}")]
+    SetPermissions(std::io::Error),
+}
+
 struct SetReadOnly {
     path: PathBuf,
 }
@@ -134,7 +141,11 @@ impl Step for SetReadOnly {
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
-        fs::metadata(&self.path)?.permissions().set_readonly(true);
+        let mut permissions = fs::metadata(&self.path)
+            .map_err(SetReadOnlyError::GetPermissions)?
+            .permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(&self.path, permissions).map_err(SetReadOnlyError::SetPermissions)?;
         Ok(None)
     }
 }
