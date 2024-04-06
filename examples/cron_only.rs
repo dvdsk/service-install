@@ -24,7 +24,7 @@ fn main() {
         println!("{}", step.describe_detailed(Tense::Present));
         step.perform().unwrap();
     }
-    println!("Install complete");
+    println!("Install complete\n\n");
 
     let steps = install_user!().name("cli").prepare_remove().unwrap();
 

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 mod cron;
 mod systemd;
+pub(crate) mod extract_path;
 
 pub use systemd::FindExeError;
 
@@ -45,10 +46,11 @@ impl System {
         name: &str,
         bin_name: &str,
         mode: Mode,
+        user: Option<&str>,
     ) -> Result<Option<(RSteps, ExeLocation)>, TearDownError> {
         match self {
-            System::Systemd => systemd::tear_down_steps(name, mode).into(),
-            System::Cron => cron::tear_down_steps(bin_name, mode).into(),
+            System::Systemd => systemd::tear_down_steps(name, mode),
+            System::Cron => cron::tear_down_steps(bin_name, mode, user),
         }
     }
 

@@ -208,12 +208,26 @@ impl RemoveStep for Remove {
             .file_name()
             .expect("In fn exe_path we made sure target is a file")
             .to_string_lossy();
+        format!("{verb} installed executable `{bin}`")
+    }
+
+    fn describe_detailed(&self, tense: Tense) -> String {
+        let verb = match tense {
+            crate::Tense::Past => "Removed",
+            crate::Tense::Present => "Removing",
+            crate::Tense::Future => "Will remove",
+        };
+        let bin = self
+            .target
+            .file_name()
+            .expect("In fn exe_path we made sure target is a file")
+            .to_string_lossy();
         let dir = self
             .target
             .parent()
             .expect("There is always a parent on linux")
             .display();
-        format!("{verb} installed executable `{bin}` at:\n\t{dir}")
+        format!("{verb} installed executable `{bin}` at:\n|\t{dir}")
     }
 
     fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>> {

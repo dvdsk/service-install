@@ -13,6 +13,7 @@ use std::{fs, io};
 
 use crate::install::builder::Trigger;
 use crate::install::files::NoHomeError;
+use crate::install::init::extract_path;
 
 use super::{ExeLocation, Mode, Params, RSteps, SetupError, Steps, TearDownError};
 
@@ -27,8 +28,10 @@ pub enum SystemCtlError {
     Failed { reason: String },
     #[error("Timed out trying to enable service")]
     EnableTimeOut,
-    #[error("Timed out trying to enable service")]
+    #[error("Timed out trying to disable service")]
     DisableTimeOut,
+    #[error("Something send a signal to systemctl ending it")]
+    Terminated,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -94,7 +97,7 @@ pub(super) fn tear_down_steps(
         Mode::User => user_path()?,
         Mode::System => system_path(),
     }
-    .join(&name);
+    .join(name);
 
     let mut steps = Vec::new();
 
@@ -142,8 +145,9 @@ fn exe_path(service_unit: PathBuf) -> Result<PathBuf, FindExeError> {
         .lines()
         .map(|l| l.trim())
         .find_map(|l| l.strip_prefix("ExecStart="))
+        .map(extract_path::split_unescaped_whitespace_once)
         .ok_or(FindExeError::ExecLineMissing(service_unit))?;
-    let path = PathBuf::from_str(path).expect("infallible");
+    let path = PathBuf::from_str(&path).expect("infallible");
     if !path.is_file() {
         Err(FindExeError::ExacPathNotFile(path))
     } else {
@@ -168,7 +172,7 @@ fn our_service(service_path: &Path) -> Result<bool, Error> {
         Err(e) => return Err(Error::Verifying(e)),
     };
     use super::{COMMENT_PREAMBLE, COMMENT_SUFFIX};
-    return Ok(service.contains(COMMENT_PREAMBLE) && service.contains(COMMENT_SUFFIX));
+    Ok(service.contains(COMMENT_PREAMBLE) && service.contains(COMMENT_SUFFIX))
 }
 
 fn systemctl(args: &[&'static str], service: &str) -> Result<(), SystemCtlError> {
@@ -178,7 +182,7 @@ fn systemctl(args: &[&'static str], service: &str) -> Result<(), SystemCtlError>
         return Ok(());
     }
 
-    let reason = String::from_utf8(output.stderr).unwrap();
+    let reason = String::from_utf8_lossy(&output.stderr).to_string();
     Err(SystemCtlError::Failed { reason })
 }
 
@@ -189,7 +193,7 @@ fn is_active(service: &str, mode: Mode) -> Result<bool, SystemCtlError> {
     };
 
     let output = Command::new("systemctl").args(args).arg(service).output()?;
-    Ok(output.status.code().unwrap() == 0)
+    Ok(output.status.code().ok_or(SystemCtlError::Terminated)? == 0)
 }
 
 fn wait_for(

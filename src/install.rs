@@ -2,6 +2,7 @@ mod builder;
 mod files;
 pub mod init;
 
+use std::ffi::OsString;
 use std::fmt::Display;
 
 pub use builder::InstallSpec;
@@ -12,6 +13,15 @@ use self::builder::ToAssign;
 pub enum Mode {
     User,
     System,
+}
+
+impl Mode {
+    fn is_user(&self) -> bool {
+        match self {
+            Mode::User => true,
+            Mode::System => false,
+        }
+    }
 }
 
 impl Display for Mode {
@@ -30,11 +40,13 @@ pub enum InstallError {
     #[error("Failed to move files: {0}")]
     Move(#[from] files::MoveError),
     #[error("Need to run as root to install to system")]
-    NeedRoot,
+    NeedRootForSysInstall,
+    #[error("Need to run as root to setup service to run as another user")]
+    NeedRootToRunAs,
     #[error("Could not find an init system we can set things up for")]
     NoInitSystemRecognized,
     #[error("Install configured to run as a user: `{0}` however this user does not exist")]
-    UserDoesNotExists(String),
+    UserDoesNotExist(String),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -134,15 +146,18 @@ impl<T: ToAssign> InstallSpec<builder::Set, builder::Set, builder::Set, T> {
             unreachable!("type sys guarantees path, name and trigger set")
         };
 
+        let not_root = matches!(sudo::check(), sudo::RunningAs::User);
         if let Mode::System = mode {
-            if let sudo::RunningAs::User = sudo::check() {
-                return Err(InstallError::NeedRoot);
+            if not_root {
+                return Err(InstallError::NeedRootForSysInstall);
             }
         }
 
         if let Some(ref user) = run_as {
-            if !crate::util::user_exists(&user).unwrap_or(true) {
-                return Err(InstallError::UserDoesNotExists(user.clone()));
+            let curr_user = uzers::get_current_username()
+                .ok_or_else(|| InstallError::UserDoesNotExist(user.clone()))?;
+            if curr_user != OsString::from(user) && not_root {
+                return Err(InstallError::NeedRootToRunAs);
             }
         }
 
@@ -163,7 +178,7 @@ impl<T: ToAssign> InstallSpec<builder::Set, builder::Set, builder::Set, T> {
 
         for init in self
             .init_systems
-            .unwrap_or_else(|| init::System::all())
+            .unwrap_or_else(init::System::all)
             .into_iter()
         {
             if init.not_available().map_err(InstallError::Init)? {
@@ -214,6 +229,7 @@ impl<P: ToAssign, T: ToAssign, I: ToAssign> InstallSpec<P, builder::Set, T, I> {
             mode,
             name: Some(name),
             bin_name,
+            run_as,
             ..
         } = self
         else {
@@ -232,7 +248,7 @@ impl<P: ToAssign, T: ToAssign, I: ToAssign> InstallSpec<P, builder::Set, T, I> {
                 return Err(RemoveError::NoInstallFound);
             };
 
-            if let Some(install) = init.tear_down_steps(&name, bin_name, mode)? {
+            if let Some(install) = init.tear_down_steps(&name, bin_name, mode, run_as.as_deref())? {
                 break install;
             }
         };

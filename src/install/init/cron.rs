@@ -15,10 +15,10 @@ pub(super) fn not_available() -> Result<bool, SetupError> {
     use sysinfo::{ProcessRefreshKind, System, UpdateKind};
     let mut s = System::new();
     s.refresh_processes_specifics(ProcessRefreshKind::new().with_cmd(UpdateKind::Always));
-    let cron_running = s.processes().into_iter().any(|(_, process)| {
+    let cron_running = s.processes().iter().any(|(_, process)| {
         process
             .cmd()
-            .into_iter()
+            .iter()
             .any(|part| part.ends_with("/cron"))
     });
     Ok(!cron_running)
@@ -84,11 +84,15 @@ pub enum GetCrontabError {
     CommandFailed { stderr: String },
 }
 
-fn current_crontab() -> Result<Vec<Line>, GetCrontabError> {
-    let output = Command::new("crontab")
-        .arg("-l")
-        .output()
-        .map_err(GetCrontabError::CouldNotRun)?;
+fn current_crontab(user: Option<&str>) -> Result<Vec<Line>, GetCrontabError> {
+    let mut command = Command::new("crontab");
+    command.arg("-l");
+    if let Some(user) = user {
+        command.arg("-u");
+        command.arg(user);
+    }
+
+    let output = command.output().map_err(GetCrontabError::CouldNotRun)?;
 
     if output.status.success() {
         let stdout = String::from_utf8(output.stdout).expect("crontab should return utf8");
@@ -114,9 +118,14 @@ enum SetCrontabError {
     FailedToWait(std::io::Error),
 }
 
-fn set_crontab(new_crontab: String) -> Result<(), SetCrontabError> {
-    let mut child = Command::new("crontab")
-        .arg("-")
+fn set_crontab(new_crontab: String, user: Option<&str>) -> Result<(), SetCrontabError> {
+    let mut command = Command::new("crontab");
+    command.arg("-");
+    if let Some(user) = user {
+        command.arg("-u");
+        command.arg(user);
+    }
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

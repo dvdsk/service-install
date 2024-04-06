@@ -32,6 +32,7 @@ pub(crate) enum Trigger {
     OnBoot,
 }
 
+#[must_use]
 #[derive(Debug)]
 pub struct InstallSpec<Path, Name, TriggerSet, InstallType>
 where
@@ -74,7 +75,6 @@ macro_rules! install_user {
 
 impl InstallSpec<NotSet, NotSet, NotSet, NotSet> {
     #[doc(hidden)]
-    #[must_use]
     /// This is an implementation detail and *should not* be called directly!
     pub fn __dont_use_use_the_macro_system(
         bin_name: &'static str,
@@ -99,7 +99,6 @@ impl InstallSpec<NotSet, NotSet, NotSet, NotSet> {
     }
 
     #[doc(hidden)]
-    #[must_use]
     /// This is an implementation detail and *should not* be called directly!
     pub fn __dont_use_use_the_macro_user(
         bin_name: &'static str,
@@ -144,7 +143,6 @@ where
     TriggerSet: ToAssign,
     InstallType: ToAssign,
 {
-    #[must_use]
     pub fn path(self, path: impl Into<PathBuf>) -> InstallSpec<Set, Name, TriggerSet, InstallType> {
         InstallSpec {
             mode: self.mode,
@@ -165,7 +163,6 @@ where
         }
     }
 
-    #[must_use]
     pub fn current_exe(
         self,
     ) -> Result<InstallSpec<Set, Name, TriggerSet, InstallType>, std::io::Error> {
@@ -188,7 +185,6 @@ where
         })
     }
 
-    #[must_use]
     pub fn name(self, name: impl Display) -> InstallSpec<Path, Set, TriggerSet, InstallType> {
         InstallSpec {
             mode: self.mode,
@@ -209,7 +205,6 @@ where
         }
     }
 
-    #[must_use]
     pub fn on_schedule(self, schedule: Schedule) -> InstallSpec<Path, Name, Set, InstallType> {
         InstallSpec {
             mode: self.mode,
@@ -230,7 +225,6 @@ where
         }
     }
 
-    #[must_use]
     pub fn on_boot(self) -> InstallSpec<Path, Name, Set, InstallType> {
         InstallSpec {
             mode: self.mode,
@@ -251,20 +245,17 @@ where
         }
     }
 
-    #[must_use]
     pub fn description(mut self, description: impl Display) -> Self {
         self.description = Some(description.to_string());
         self
     }
 
     /// These args will be shell escaped
-    #[must_use]
     pub fn args(mut self, args: Vec<String>) -> Self {
         self.args = args;
         self
     }
 
-    #[must_use]
     pub fn working_dir(mut self, dir: PathBuf) -> Self {
         self.working_dir = Some(dir);
         self
@@ -275,7 +266,6 @@ where
     /// order in which this was set.
     ///
     /// Note: setting this for an uninstall might cause it to fail
-    #[must_use]
     pub fn allowed_inits(mut self, allowed: impl AsRef<[init::System]>) -> Self {
         self.init_systems = Some(allowed.as_ref().to_vec());
         self

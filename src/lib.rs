@@ -9,7 +9,6 @@
 mod error;
 mod install;
 mod schedule;
-mod util;
 
 pub use install::InstallSpec;
 pub use install::InstallError;
