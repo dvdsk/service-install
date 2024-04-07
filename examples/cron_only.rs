@@ -1,7 +1,9 @@
+use service_install::Tense;
+use service_install::schedule::Schedule;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-use service_install::{install_user, InitSystem, Schedule, Tense};
+use service_install::{install_user, install::init};
 use time::Time;
 
 fn main() {
@@ -16,7 +18,7 @@ fn main() {
         .unwrap()
         .name("cli")
         .on_schedule(schedule)
-        .allowed_inits(&[InitSystem::Cron])
+        .allowed_inits(&[init::System::Cron])
         .prepare_install()
         .unwrap();
 

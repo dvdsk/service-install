@@ -1,19 +1,15 @@
 #![doc= include_str!("../README.md")]
 
-// offer user and system install
-// place files somewhere that makes sense
-// build the unit files
-// enable/disable
-// remove unit files
+/// Changes the tense of the string returned by the `describe` functions for
+/// [InstallStep](install::InstallStep), [RemoveStep](install::RemoveStep) and
+/// [Rollback](install::RollbackStep).
+pub enum Tense {
+    Past,
+    Present,
+    Future,
+}
 
-mod error;
-mod install;
-mod schedule;
-
-pub use install::InstallSpec;
-pub use install::InstallError;
-pub use install::{Step, RemoveStep};
-pub use install::Tense;
-pub use install::init::System as InitSystem;
-
-pub use schedule::Schedule;
+/// Installation (or removal) configuration, steps and errors.
+pub mod install;
+/// Scheduling options
+pub mod schedule;

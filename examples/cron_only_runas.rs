@@ -1,7 +1,8 @@
+use service_install::schedule::Schedule;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-use service_install::{install_system, InitSystem, Schedule, Tense};
+use service_install::{install::init, install_system, Tense};
 use time::Time;
 
 fn main() {
@@ -16,7 +17,7 @@ fn main() {
         .unwrap()
         .name("cli")
         .on_schedule(schedule)
-        .allowed_inits(&[InitSystem::Cron])
+        .allowed_inits(&[init::System::Cron])
         .run_as("work")
         .prepare_install()
         .unwrap();
@@ -27,7 +28,11 @@ fn main() {
     }
     println!("Install complete\n\n");
 
-    let steps = install_system!().name("cli").run_as("work").prepare_remove().unwrap();
+    let steps = install_system!()
+        .name("cli")
+        .run_as("work")
+        .prepare_remove()
+        .unwrap();
 
     for mut step in steps {
         println!("{}", step.describe_detailed(Tense::Present));

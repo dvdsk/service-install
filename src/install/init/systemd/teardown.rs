@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use crate::install::init::RSteps;
 use crate::install::Mode;
 use crate::install::RemoveStep;
+use crate::install::Tense;
 
 use super::{disable, Error};
 
@@ -12,11 +13,11 @@ pub(crate) struct RemoveService {
 }
 
 impl RemoveStep for RemoveService {
-    fn describe(&self, tense: crate::Tense) -> String {
+    fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            crate::Tense::Past => "Removed",
-            crate::Tense::Present => "Removing",
-            crate::Tense::Future => "Will remove",
+            Tense::Past => "Removed",
+            Tense::Present => "Removing",
+            Tense::Future => "Will remove",
         };
         let path = self.path.display();
         format!("{verb} systemd service unit at:\n\t{path}")
@@ -36,11 +37,11 @@ pub(crate) struct DisableService {
 }
 
 impl RemoveStep for DisableService {
-    fn describe(&self, tense: crate::Tense) -> String {
+    fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            crate::Tense::Past => "Disabled",
-            crate::Tense::Present => "Disabling",
-            crate::Tense::Future => "Will disable",
+            Tense::Past => "Disabled",
+            Tense::Present => "Disabling",
+            Tense::Future => "Will disable",
         };
         format!("{verb} systemd {} service: {}", self.mode, self.name)
     }
@@ -59,11 +60,11 @@ pub(crate) struct RemoveTimer {
 }
 
 impl RemoveStep for RemoveTimer {
-    fn describe(&self, tense: crate::Tense) -> String {
+    fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            crate::Tense::Past => "Removed",
-            crate::Tense::Present => "Removing",
-            crate::Tense::Future => "Will remove",
+            Tense::Past => "Removed",
+            Tense::Present => "Removing",
+            Tense::Future => "Will remove",
         };
         let path = self.path.display();
         format!("{verb} systemd timer at:\n\t{path}")
@@ -83,11 +84,11 @@ pub(crate) struct DisableTimer {
 }
 
 impl RemoveStep for DisableTimer {
-    fn describe(&self, tense: crate::Tense) -> String {
+    fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            crate::Tense::Past => "Disabled",
-            crate::Tense::Present => "Disabling",
-            crate::Tense::Future => "Will disable",
+            Tense::Past => "Disabled",
+            Tense::Present => "Disabling",
+            Tense::Future => "Will disable",
         };
         format!("{verb} systemd {} timer: {}", self.mode, self.name)
     }

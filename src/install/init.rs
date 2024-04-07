@@ -6,15 +6,16 @@ pub(crate) mod extract_path;
 
 pub use systemd::FindExeError;
 
-use crate::RemoveStep;
+use crate::install::RemoveStep;
 
 use super::builder::Trigger;
 use super::files::NoHomeError;
-use super::{Mode, Step};
+use super::{Mode, InstallStep};
 
-type Steps = Vec<Box<dyn Step>>;
+type Steps = Vec<Box<dyn InstallStep>>;
 type RSteps = Vec<Box<dyn RemoveStep>>;
 
+/// Allowed init systems, set using: [`install::Spec::allowed_inits()`](super::Spec::allowed_inits)
 #[derive(Debug, Clone)]
 pub enum System {
     Systemd,
@@ -32,7 +33,7 @@ impl System {
     pub(crate) fn not_available(&self) -> Result<bool, SetupError> {
         match self {
             System::Systemd => systemd::not_available(),
-            System::Cron => cron::not_available(),
+            System::Cron => Ok(cron::not_available()),
         }
     }
     pub(crate) fn set_up_steps(&self, params: &Params) -> Result<Steps, SetupError> {
@@ -84,7 +85,7 @@ pub enum TearDownError {
 }
 
 #[derive(Debug, Clone)]
-pub struct Params {
+pub(crate) struct Params {
     pub(crate) name: String,
     pub(crate) bin_name: &'static str,
     pub(crate) description: Option<String>,

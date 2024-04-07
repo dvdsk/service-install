@@ -1,15 +1,15 @@
-use crate::install::{init, Rollback};
+use crate::install::{init, RollbackStep, Tense};
 use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use itertools::Itertools;
-use tracing::instrument;
 
 use crate::install::builder::Trigger;
-use crate::install::init::{EscapedPath, Params, SetupError, Steps};
+use crate::install::init::{EscapedPath, Params, Steps};
 use crate::install::Mode;
-use crate::{Schedule, Step};
+use crate::install::InstallStep;
+use crate::schedule::Schedule;
 
 use super::teardown::DisableTimer;
 use super::{teardown, Error};
@@ -19,29 +19,29 @@ struct Service {
     path: PathBuf,
 }
 
-impl Step for Service {
-    fn describe(&self, tense: crate::Tense) -> String {
+impl InstallStep for Service {
+    fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            crate::Tense::Past => "Wrote",
-            crate::Tense::Present => "Writing",
-            crate::Tense::Future => "Will write",
+            Tense::Past => "Wrote",
+            Tense::Present => "Writing",
+            Tense::Future => "Will write",
         };
         let path = self.path.display();
         format!("{verb} systemd service unit to:\n\t{path}")
     }
 
-    fn describe_detailed(&self, tense: crate::Tense) -> String {
+    fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
-            crate::Tense::Past => "Wrote",
-            crate::Tense::Present => "Writing",
-            crate::Tense::Future => "Will write",
+            Tense::Past => "Wrote",
+            Tense::Present => "Writing",
+            Tense::Future => "Will write",
         };
         let path = self.path.display();
         let content = self.unit.replace('\n', "\n\t");
         format!("{verb} systemd service unit to:\n\t{path}\ncontent:\n\t{content}")
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
         write_unit(&self.path, &self.unit)
             .map_err(|e| Error::Writing {
                 e,
@@ -59,29 +59,29 @@ struct Timer {
     path: PathBuf,
 }
 
-impl Step for Timer {
-    fn describe(&self, tense: crate::Tense) -> String {
+impl InstallStep for Timer {
+    fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            crate::Tense::Past => "Wrote",
-            crate::Tense::Present => "Writing",
-            crate::Tense::Future => "Will write",
+            Tense::Past => "Wrote",
+            Tense::Present => "Writing",
+            Tense::Future => "Will write",
         };
         let path = self.path.display();
         format!("{verb} systemd timer unit to:\n\t{path}")
     }
 
-    fn describe_detailed(&self, tense: crate::Tense) -> String {
+    fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
-            crate::Tense::Past => "Wrote",
-            crate::Tense::Present => "Writing",
-            crate::Tense::Future => "Will write",
+            Tense::Past => "Wrote",
+            Tense::Present => "Writing",
+            Tense::Future => "Will write",
         };
         let path = self.path.display();
         let content = self.unit.replace('\n', "\n\t");
         format!("{verb} systemd timer unit to:\n\t{path}\ncontent:\n\t{content}")
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
         write_unit(&self.path, &self.unit)
             .map_err(|e| Error::Writing {
                 e,
@@ -99,17 +99,17 @@ struct EnableTimer {
     mode: Mode,
 }
 
-impl Step for EnableTimer {
-    fn describe(&self, tense: crate::Tense) -> String {
+impl InstallStep for EnableTimer {
+    fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            crate::Tense::Past => "Enabled",
-            crate::Tense::Present => "Enabling",
-            crate::Tense::Future => "Will Enable",
+            Tense::Past => "Enabled",
+            Tense::Present => "Enabling",
+            Tense::Future => "Will Enable",
         };
         format!("{verb} systemd {} timer: {}", self.mode, self.name)
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
         let name = self.name.clone() + ".timer";
         super::enable(&name, self.mode)
             .map_err(Error::SystemCtl)
@@ -126,17 +126,17 @@ struct EnableService {
     mode: Mode,
 }
 
-impl Step for EnableService {
-    fn describe(&self, tense: crate::Tense) -> String {
+impl InstallStep for EnableService {
+    fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            crate::Tense::Past => "Enabled",
-            crate::Tense::Present => "Enabling",
-            crate::Tense::Future => "Will Enable",
+            Tense::Past => "Enabled",
+            Tense::Present => "Enabling",
+            Tense::Future => "Will Enable",
         };
         format!("{verb} systemd {} service: {}", self.mode, self.name)
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
         let name = self.name.clone() + ".service";
         super::enable(&name, self.mode)
             .map_err(Error::SystemCtl)
@@ -149,10 +149,10 @@ impl Step for EnableService {
 }
 
 pub(crate) fn with_timer(
-    path_without_extension: PathBuf,
+    path_without_extension: &Path,
     params: &Params,
     schedule: &Schedule,
-) -> Result<Steps, SetupError> {
+) -> Steps {
     let unit = render_service(params);
     let path = path_without_extension.with_extension("service");
     let create_service = Box::new(Service { unit, path });
@@ -164,13 +164,10 @@ pub(crate) fn with_timer(
         mode: params.mode,
     });
 
-    Ok(vec![create_service, create_timer, enable])
+    vec![create_service, create_timer, enable]
 }
 
-pub(crate) fn without_timer(
-    path_without_extension: PathBuf,
-    params: &Params,
-) -> Result<Steps, SetupError> {
+pub(crate) fn without_timer(path_without_extension: &Path, params: &Params) -> Steps {
     let unit = render_service(params);
     let path = path_without_extension.with_extension("service");
     let create_service = Box::new(Service { unit, path });
@@ -180,7 +177,7 @@ pub(crate) fn without_timer(
         mode: params.mode,
     });
 
-    Ok(vec![create_service, enable])
+    vec![create_service, enable]
 }
 
 fn render_service(params: &Params) -> String {
@@ -255,7 +252,6 @@ WantedBy=timers.target"
     )
 }
 
-#[instrument(skip(unit), ret)]
 fn write_unit(path: &Path, unit: &str) -> Result<(), io::Error> {
     let mut f = std::fs::File::create(path)?;
     f.write_all(unit.as_bytes())?;

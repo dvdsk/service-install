@@ -2,9 +2,9 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::RemoveStep;
+use crate::install::RemoveStep;
 
-use super::{Mode, Rollback, Step, Tense};
+use super::{Mode, RollbackStep, InstallStep, Tense};
 
 #[derive(thiserror::Error, Debug)]
 pub enum MoveError {
@@ -36,7 +36,7 @@ fn system_dir() -> Option<PathBuf> {
 pub struct NoHomeError;
 
 fn user_dir() -> Result<Option<PathBuf>, NoHomeError> {
-    let possible_paths: &[&'static Path] = &[".local/hi bin"].map(Path::new);
+    let possible_paths: &[&'static Path] = &[".local/bin"].map(Path::new);
 
     for relative in possible_paths {
         let path = home::home_dir().ok_or(NoHomeError)?.join(relative);
@@ -53,7 +53,7 @@ pub(crate) struct Move {
     pub target: PathBuf,
 }
 
-impl Step for Move {
+impl InstallStep for Move {
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Copied",
@@ -89,7 +89,7 @@ impl Step for Move {
         format!("{verb} executable `{name}` to:\n\t{target}")
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
         std::fs::copy(&self.source, &self.target)?;
         Ok(Some(Box::new(Remove {
             target: self.target.clone(),
@@ -101,7 +101,7 @@ struct SetRootOwner {
     path: PathBuf,
 }
 
-impl Step for SetRootOwner {
+impl InstallStep for SetRootOwner {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Set",
@@ -111,7 +111,7 @@ impl Step for SetRootOwner {
         format!("{verb} executables owner to root")
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
         const ROOT: u32 = 0;
         std::os::unix::fs::chown(&self.path, Some(ROOT), Some(ROOT))?;
         Ok(None)
@@ -130,7 +130,7 @@ struct SetReadOnly {
     path: PathBuf,
 }
 
-impl Step for SetReadOnly {
+impl InstallStep for SetReadOnly {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Made",
@@ -140,7 +140,7 @@ impl Step for SetReadOnly {
         format!("{verb} the executable read only")
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
         let mut permissions = fs::metadata(&self.path)
             .map_err(SetReadOnlyError::GetPermissions)?
             .permissions();
@@ -150,7 +150,7 @@ impl Step for SetReadOnly {
     }
 }
 
-type Steps = Vec<Box<dyn Step>>;
+type Steps = Vec<Box<dyn InstallStep>>;
 pub(crate) fn move_files(source: PathBuf, mode: Mode) -> Result<(Steps, PathBuf), MoveError> {
     let dir = match mode {
         Mode::User => user_dir()?.ok_or(MoveError::UserDirNotAvailable)?,
@@ -168,7 +168,7 @@ pub(crate) fn move_files(source: PathBuf, mode: Mode) -> Result<(Steps, PathBuf)
             name,
             source,
             target: target.clone(),
-        }) as Box<dyn Step>,
+        }) as Box<dyn InstallStep>,
         Box::new(SetReadOnly {
             path: target.clone(),
         }),
@@ -210,9 +210,9 @@ pub(crate) struct Remove {
 impl RemoveStep for Remove {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            crate::Tense::Past => "Removed",
-            crate::Tense::Present => "Removing",
-            crate::Tense::Future => "Will remove",
+            Tense::Past => "Removed",
+            Tense::Present => "Removing",
+            Tense::Future => "Will remove",
         };
         let bin = self
             .target
@@ -224,9 +224,9 @@ impl RemoveStep for Remove {
 
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
-            crate::Tense::Past => "Removed",
-            crate::Tense::Present => "Removing",
-            crate::Tense::Future => "Will remove",
+            Tense::Past => "Removed",
+            Tense::Present => "Removing",
+            Tense::Future => "Will remove",
         };
         let bin = self
             .target

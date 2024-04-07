@@ -81,12 +81,12 @@ pub(super) fn set_up_steps(params: &Params) -> Result<Steps, SetupError> {
     }
     .join(&params.name);
 
-    match params.trigger {
+    Ok(match params.trigger {
         Trigger::OnSchedule(ref schedule) => {
-            setup::with_timer(path_without_extension, params, schedule)
+            setup::with_timer(&path_without_extension, params, schedule)
         }
-        Trigger::OnBoot => setup::without_timer(path_without_extension, params),
-    }
+        Trigger::OnBoot => setup::without_timer(&path_without_extension, params),
+    })
 }
 
 pub(super) fn tear_down_steps(
@@ -126,6 +126,8 @@ pub(super) fn tear_down_steps(
     Ok(Some((steps, exe_path)))
 }
 
+/// The executables location could not be found. It is needed to safely
+/// uninstall.
 #[derive(Debug, thiserror::Error)]
 pub enum FindExeError {
     #[error("Could not read systemd unit file at: {path}, error: {err}")]
@@ -143,15 +145,15 @@ fn exe_path(service_unit: PathBuf) -> Result<PathBuf, FindExeError> {
     })?;
     let path = unit
         .lines()
-        .map(|l| l.trim())
+        .map(str::trim)
         .find_map(|l| l.strip_prefix("ExecStart="))
         .map(extract_path::split_unescaped_whitespace_once)
         .ok_or(FindExeError::ExecLineMissing(service_unit))?;
     let path = PathBuf::from_str(&path).expect("infallible");
-    if !path.is_file() {
-        Err(FindExeError::ExacPathNotFile(path))
-    } else {
+    if path.is_file() {
         Ok(path)
+    } else {
+        Err(FindExeError::ExacPathNotFile(path))
     }
 }
 
@@ -166,12 +168,12 @@ fn system_path() -> PathBuf {
 }
 
 fn our_service(service_path: &Path) -> Result<bool, Error> {
+    use super::{COMMENT_PREAMBLE, COMMENT_SUFFIX};
     let service = match fs::read_to_string(service_path) {
         Ok(service) => service,
         Err(e) if e.kind() == ErrorKind::NotFound => return Ok(false),
         Err(e) => return Err(Error::Verifying(e)),
     };
-    use super::{COMMENT_PREAMBLE, COMMENT_SUFFIX};
     Ok(service.contains(COMMENT_PREAMBLE) && service.contains(COMMENT_SUFFIX))
 }
 

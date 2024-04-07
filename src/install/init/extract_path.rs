@@ -61,7 +61,7 @@ fn eat_head(head: [char; 3], out: &mut String, in_quoted: &mut bool) -> usize {
     };
 
     if unescaped_quote {
-        *in_quoted = !*in_quoted
+        *in_quoted = !*in_quoted;
     }
     eaten
 }

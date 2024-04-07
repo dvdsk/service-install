@@ -1,22 +1,33 @@
 mod builder;
 mod files;
+
+/// Errors and settings related to the supported init systems
 pub mod init;
 
 use std::ffi::OsString;
 use std::fmt::Display;
 
-pub use builder::InstallSpec;
+pub use builder::Spec;
+
+use crate::Tense;
 
 use self::builder::ToAssign;
+use self::init::SetupError;
 
+/// Whether to install system wide or for the current user only
 #[derive(Debug, Clone, Copy)]
 pub enum Mode {
+    /// install for the current user, does not require running the installation
+    /// as superuser/admin
     User,
+    /// install to the entire system, the installation/removal must be ran as
+    /// superuser/admin or it will return
+    /// [`InstallError::NeedRootForSysInstall`] or [`RemoveError::NeedRoot`]
     System,
 }
 
 impl Mode {
-    fn is_user(&self) -> bool {
+    fn is_user(self) -> bool {
         match self {
             Mode::User => true,
             Mode::System => false,
@@ -33,6 +44,7 @@ impl Display for Mode {
     }
 }
 
+/// Errors that can occur when preparing for or performing an installation
 #[derive(thiserror::Error, Debug)]
 pub enum InstallError {
     #[error("Error setting up init: {0}")]
@@ -47,8 +59,26 @@ pub enum InstallError {
     NoInitSystemRecognized,
     #[error("Install configured to run as a user: `{0}` however this user does not exist")]
     UserDoesNotExist(String),
+    #[error("All supported init systems found failed, errors: {0:?}")]
+    SupportedInitSystemFailed(Vec<InitSystemFailure>),
 }
 
+/// The init system was found and we tried to set up the service but ran into an
+/// error. 
+///
+/// When there is another init system that does work this error is ignored. If
+/// no other system is available or there is but it/they fail too this error is
+/// reported.
+///
+/// A warning is always issued if the `tracing` feature is enabled.
+#[derive(Debug, thiserror::Error)]
+#[error("Init system: {name} ran into error: {error}")]
+pub struct InitSystemFailure {
+    name: String,
+    error: SetupError,
+}
+
+/// Errors that can occur when preparing for or removing an installation
 #[derive(thiserror::Error, Debug)]
 pub enum RemoveError {
     #[error("Could not find this executable's location: {0}")]
@@ -63,39 +93,104 @@ pub enum RemoveError {
     NeedRoot,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum FindInstallError {}
-
-/// Changes when in action takes place in the Step::describe
-/// function.
-pub enum Tense {
-    Past,
-    Present,
-    Future,
-}
-
-pub trait Step {
+/// One step in the install process. Can be executed or described.
+pub trait InstallStep {
+    /// A short (one line) description of what this performing this step will
+    /// do. Pass in the tense you want for the description (past, present or
+    /// future)
     fn describe(&self, tense: Tense) -> String;
+    /// A verbose description of what performing this step will do to the
+    /// system. Includes as many details as possible. Pass in the tense you want
+    /// for the description (past, present or future)
     fn describe_detailed(&self, tense: Tense) -> String {
         self.describe(tense)
     }
-    fn perform(&mut self) -> Result<Option<Box<dyn Rollback>>, Box<dyn std::error::Error>>;
+    /// Perform this install step making a change to the system. This may return
+    /// a [`RollbackStep`] that can be used to undo the change made in the
+    /// future. This can be used in an install wizard to roll back changes when
+    /// an error happens.
+    ///
+    /// # Errors
+    /// The system can change between preparing to install and actually
+    /// installing. For example all disk space could be used. Or the install
+    /// could run into an error that was not checked for while preparing. If you
+    /// find this happens please make an issue.
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>>;
 }
 
+impl std::fmt::Debug for &dyn InstallStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.describe(Tense::Future))
+    }
+}
+
+impl Display for &dyn InstallStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.describe_detailed(Tense::Future))
+    }
+}
+
+/// One step in the remove process. Can be executed or described.
 pub trait RemoveStep {
+    /// A short (one line) description of what this performing this step will
+    /// do. Pass in the tense you want for the description (past, present or future)
     fn describe(&self, tense: Tense) -> String;
+    /// A verbose description of what performing this step will do to the
+    /// system. Includes as many details as possible. Pass in the tense you want
+    /// for the description (past, present or future)
     fn describe_detailed(&self, tense: Tense) -> String {
         self.describe(tense)
     }
+    /// Executes this remove step. This can be used when building an
+    /// uninstall/remove wizard. For example to ask the user confirmation
+    /// before each step.
+    ///
+    /// # Errors
+    /// The system can change between preparing to remove and actually removing
+    /// the install. For example a file could have been removed by the user of
+    /// the system. Or the removal could run into an error that was not checked
+    /// for while preparing. If you find this happens please make an issue.
     fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>>;
 }
 
-pub trait Rollback {
+impl std::fmt::Debug for &dyn RemoveStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.describe(Tense::Future))
+    }
+}
+
+impl Display for &dyn RemoveStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.describe_detailed(Tense::Future))
+    }
+}
+
+/// Undoes a [`InstallStep`]. Can be executed or described.
+pub trait RollbackStep {
+    /// Executes this rollback step. This can be used when building an install
+    /// wizard. You can [`describe()`](RollbackStep::describe) and then ask the
+    /// end user if the want to perform it.
+    ///
+    /// # Errors
+    /// The system could have changed between the install and the rollback.
+    /// Leading to various errors, mostly IO.
     fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>>;
     fn describe(&self) -> String;
 }
 
-impl<T: RemoveStep> Rollback for T {
+impl std::fmt::Debug for &dyn RollbackStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.describe())
+    }
+}
+
+impl Display for &dyn RollbackStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.describe())
+    }
+}
+
+impl<T: RemoveStep> RollbackStep for T {
     fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.perform()
     }
@@ -105,10 +200,38 @@ impl<T: RemoveStep> Rollback for T {
     }
 }
 
-pub struct InstallSteps(pub Vec<Box<dyn Step>>);
+/// Changes to the system that need to be applied to do the installation.
+///
+/// Returned by [`Spec::prepare_install`].Use
+/// [`install()`](InstallSteps::install) to apply all changes at once. This
+/// implements [`IntoIterator`] yielding [`InstallSteps`](InstallStep). These
+/// steps can be described possibly in detail and/or performed one by one.
+pub struct InstallSteps(pub(crate) Vec<Box<dyn InstallStep>>);
+
+impl std::fmt::Debug for InstallSteps {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for step in self.0.iter().map(|step| step.describe(Tense::Future)) {
+            write!(f, "{step\n}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Display for InstallSteps {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for step in self
+            .0
+            .iter()
+            .map(|step| step.describe_detailed(Tense::Future))
+        {
+            write!(f, "{step\n}")?;
+        }
+        Ok(())
+    }
+}
 
 impl IntoIterator for InstallSteps {
-    type Item = Box<dyn Step>;
+    type Item = Box<dyn InstallStep>;
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -117,6 +240,13 @@ impl IntoIterator for InstallSteps {
 }
 
 impl InstallSteps {
+    /// Perform all steps needed to install.
+    ///
+    /// # Errors
+    /// The system can change between preparing to install and actually
+    /// installing. For example all disk space could be used. Or the install
+    /// could run into an error that was not checked for while preparing. If you
+    /// find this happens please make an issue.
     pub fn install(self) -> Result<String, Box<dyn std::error::Error>> {
         let mut description = Vec::new();
         for mut step in self.0 {
@@ -128,9 +258,21 @@ impl InstallSteps {
     }
 }
 
-impl<T: ToAssign> InstallSpec<builder::Set, builder::Set, builder::Set, T> {
+impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
+    /// Prepare for installing. This makes a number of checks and if they are
+    /// passed it returns the [`InstallSteps`]. These implement [`IntoIterator`] and
+    /// can be inspected and executated one by one or executed in one step using
+    /// [`InstallSteps::install`].
+    ///
+    /// # Errors
+    /// Returns an error if:
+    ///  - the install is set to be system wide install while not running as admin/superuser
+    ///  - the service should run as another user then the current one while not running as admin/superuser
+    ///  - the service should run for a nonexisting user
+    ///  - no suitable install directory could be found
+    ///  - the path for the executable does not point to a file
     pub fn prepare_install(self) -> Result<InstallSteps, InstallError> {
-        let builder::InstallSpec {
+        let builder::Spec {
             mode,
             path: Some(source),
             name: Some(name),
@@ -176,11 +318,8 @@ impl<T: ToAssign> InstallSpec<builder::Set, builder::Set, builder::Set, T> {
             mode,
         };
 
-        for init in self
-            .init_systems
-            .unwrap_or_else(init::System::all)
-            .into_iter()
-        {
+        let mut errors = Vec::new();
+        for init in self.init_systems.unwrap_or_else(init::System::all) {
             if init.not_available().map_err(InstallError::Init)? {
                 continue;
             }
@@ -190,20 +329,54 @@ impl<T: ToAssign> InstallSpec<builder::Set, builder::Set, builder::Set, T> {
                     steps.extend(init_steps);
                     return Ok(InstallSteps(steps));
                 }
-                Err(error) => {
-                    tracing::warn!(
-                        "Could not set up init using {}, error: {error}",
-                        init.name()
-                    )
+                Err(err) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!("Could not set up init using {}, error: {err}", init.name());
+                    errors.push(InitSystemFailure {
+                        name: init.name().to_owned(),
+                        error: err,
+                    });
                 }
             };
         }
 
-        Err(InstallError::NoInitSystemRecognized)
+        if errors.is_empty() {
+            Err(InstallError::NoInitSystemRecognized)
+        } else {
+            Err(InstallError::SupportedInitSystemFailed(errors))
+        }
     }
 }
 
-pub struct RemoveSteps(pub Vec<Box<dyn RemoveStep>>);
+/// Changes to the system that need to be applied to remove the installation.
+///
+/// Returned by [`Spec::prepare_remove`].Use
+/// [`remove()`](RemoveSteps::remove) to apply all changes at once. This
+/// implements [`IntoIterator`] yielding [`RemoveSteps`](RemoveStep). These
+/// steps can be described possibly in detail and/or performed one by one.
+pub struct RemoveSteps(pub(crate) Vec<Box<dyn RemoveStep>>);
+
+impl std::fmt::Debug for RemoveSteps {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for step in self.0.iter().map(|step| step.describe(Tense::Future)) {
+            write!(f, "{step\n}")?;
+        }
+        Ok(())
+    }
+}
+
+impl Display for RemoveSteps {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for step in self
+            .0
+            .iter()
+            .map(|step| step.describe_detailed(Tense::Future))
+        {
+            write!(f, "{step\n}")?;
+        }
+        Ok(())
+    }
+}
 
 impl IntoIterator for RemoveSteps {
     type Item = Box<dyn RemoveStep>;
@@ -215,6 +388,13 @@ impl IntoIterator for RemoveSteps {
 }
 
 impl RemoveSteps {
+    /// Perform all steps needed to remove an installation.
+    ///
+    /// # Errors
+    /// The system can change between preparing to remove and actually removing
+    /// the install. For example a file could have been removed by the user of
+    /// the system. Or the removal could run into an error that was not checked
+    /// for while preparing. If you find this happens please make an issue.
     pub fn remove(self) -> Result<String, Box<dyn std::error::Error>> {
         let mut description = Vec::new();
         for mut step in self.0 {
@@ -226,9 +406,19 @@ impl RemoveSteps {
     }
 }
 
-impl<P: ToAssign, T: ToAssign, I: ToAssign> InstallSpec<P, builder::Set, T, I> {
+impl<P: ToAssign, T: ToAssign, I: ToAssign> Spec<P, builder::Set, T, I> {
+    /// Prepare for removing an install. This makes a number of checks and if
+    /// they are passed it returns the [`RemoveSteps`]. These implement
+    /// [`IntoIterator`] and can be inspected and executated one by one or
+    /// executed in one step using [`RemoveSteps::remove`].
+    ///
+    /// # Errors
+    /// Returns an error if:
+    ///  - trying to remove a system install while not running as admin/superuser
+    ///  - no install is found
+    ///  - anything goes wrong setting up the removal
     pub fn prepare_remove(self) -> Result<RemoveSteps, RemoveError> {
-        let builder::InstallSpec {
+        let builder::Spec {
             mode,
             name: Some(name),
             bin_name,

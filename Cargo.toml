@@ -1,23 +1,38 @@
 [package]
 name = "service-install"
 version = "0.1.0"
+license = "MIT"
+description = "Easily provide users an install method on Linux systems"
+repository = "https://github.com/dvdsk/service-install"
 edition = "2021"
+readme = "README.md"
+include = [
+	"**/*.rs",
+	"Cargo.toml",
+	"README.md",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 home = "0.5.5"
-itertools = "0.10.5"
-procfs = "0.16.0"
-shell-escape = "0.1.5"
-sudo = "0.6.0"
-sysinfo = "0.30.7"
-thiserror = "1.0.40"
-time = "0.3.21"
-tracing = "0.1.37"
-typed-builder = "0.14.0"
 uzers = "0.11.3"
+sysinfo = "0.30.7"
+
+sudo = "0.6.0"
+itertools = "0.10.5"
+thiserror = "1.0.40"
+shell-escape = "0.1.5"
+
+time = "0.3.21"
+tracing = { version="0.1.37", optional=true }
+
+[features]
+tracing = ["dep:tracing"]
 
 [dev-dependencies]
 dialoguer = "0.11.0"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

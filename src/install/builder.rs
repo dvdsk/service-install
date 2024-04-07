@@ -2,7 +2,7 @@ use std::fmt::Display;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 
-use crate::Schedule;
+use crate::schedule::Schedule;
 
 use super::{init, Mode};
 
@@ -25,16 +25,19 @@ impl ToAssign for NotSet {}
 impl ToAssign for SystemInstall {}
 impl ToAssign for UserInstall {}
 
-
 #[derive(Debug, Clone)]
 pub(crate) enum Trigger {
     OnSchedule(Schedule),
     OnBoot,
 }
 
+/// The configuration for the current install, needed to perform the
+/// installation or remove an existing one. Create this by using the
+/// [`install_system`](crate::install_system) or
+/// [`install_user`](crate::install_user) macros.
 #[must_use]
 #[derive(Debug)]
-pub struct InstallSpec<Path, Name, TriggerSet, InstallType>
+pub struct Spec<Path, Name, TriggerSet, InstallType>
 where
     Path: ToAssign,
     Name: ToAssign,
@@ -59,27 +62,29 @@ where
     pub(crate) install_type: PhantomData<InstallType>,
 }
 
+/// Create a new [`Spec`] for a system wide installation
 #[macro_export]
 macro_rules! install_system {
     () => {
-        service_install::InstallSpec::__dont_use_use_the_macro_system(env!("CARGO_BIN_NAME"))
+        service_install::install::Spec::__dont_use_use_the_macro_system(env!("CARGO_BIN_NAME"))
     };
 }
 
+/// Create a new [`Spec`] for an installation for the current user only
 #[macro_export]
 macro_rules! install_user {
     () => {
-        service_install::InstallSpec::__dont_use_use_the_macro_user(env!("CARGO_BIN_NAME"))
+        service_install::install::Spec::__dont_use_use_the_macro_user(env!("CARGO_BIN_NAME"))
     };
 }
 
-impl InstallSpec<NotSet, NotSet, NotSet, NotSet> {
+impl Spec<NotSet, NotSet, NotSet, NotSet> {
     #[doc(hidden)]
     /// This is an implementation detail and *should not* be called directly!
     pub fn __dont_use_use_the_macro_system(
         bin_name: &'static str,
-    ) -> InstallSpec<NotSet, NotSet, NotSet, SystemInstall> {
-        InstallSpec {
+    ) -> Spec<NotSet, NotSet, NotSet, SystemInstall> {
+        Spec {
             mode: Mode::System,
             path: None,
             name: None,
@@ -102,8 +107,8 @@ impl InstallSpec<NotSet, NotSet, NotSet, NotSet> {
     /// This is an implementation detail and *should not* be called directly!
     pub fn __dont_use_use_the_macro_user(
         bin_name: &'static str,
-    ) -> InstallSpec<NotSet, NotSet, NotSet, UserInstall> {
-        InstallSpec {
+    ) -> Spec<NotSet, NotSet, NotSet, UserInstall> {
+        Spec {
             mode: Mode::User,
             path: None,
             name: None,
@@ -123,28 +128,28 @@ impl InstallSpec<NotSet, NotSet, NotSet, NotSet> {
     }
 }
 
-impl<Path, Name, TriggerSet> InstallSpec<Path, Name, TriggerSet, SystemInstall>
+impl<Path, Name, TriggerSet> Spec<Path, Name, TriggerSet, SystemInstall>
 where
     Path: ToAssign,
     Name: ToAssign,
     TriggerSet: ToAssign,
 {
-    /// Only available for Install::system
+    /// Only available for [`install_system`](crate::install_system)
     pub fn run_as(mut self, user: impl Into<String>) -> Self {
         self.run_as = Some(user.into());
         self
     }
 }
 
-impl<Path, Name, TriggerSet, InstallType> InstallSpec<Path, Name, TriggerSet, InstallType>
+impl<Path, Name, TriggerSet, InstallType> Spec<Path, Name, TriggerSet, InstallType>
 where
     Path: ToAssign,
     Name: ToAssign,
     TriggerSet: ToAssign,
     InstallType: ToAssign,
 {
-    pub fn path(self, path: impl Into<PathBuf>) -> InstallSpec<Set, Name, TriggerSet, InstallType> {
-        InstallSpec {
+    pub fn path(self, path: impl Into<PathBuf>) -> Spec<Set, Name, TriggerSet, InstallType> {
+        Spec {
             mode: self.mode,
             path: Some(path.into()),
             name: self.name,
@@ -163,10 +168,14 @@ where
         }
     }
 
-    pub fn current_exe(
-        self,
-    ) -> Result<InstallSpec<Set, Name, TriggerSet, InstallType>, std::io::Error> {
-        Ok(InstallSpec {
+    /// Install a copy of the currently running exe.
+    ///
+    /// # Errors
+    /// Will return an error if the path to the current executable could not be gotten.
+    /// This can fail for a number of reasons such as filesystem operations and syscall
+    /// failures.
+    pub fn current_exe(self) -> Result<Spec<Set, Name, TriggerSet, InstallType>, std::io::Error> {
+        Ok(Spec {
             mode: self.mode,
             path: Some(std::env::current_exe()?),
             name: self.name,
@@ -185,8 +194,8 @@ where
         })
     }
 
-    pub fn name(self, name: impl Display) -> InstallSpec<Path, Set, TriggerSet, InstallType> {
-        InstallSpec {
+    pub fn name(self, name: impl Display) -> Spec<Path, Set, TriggerSet, InstallType> {
+        Spec {
             mode: self.mode,
             path: self.path,
             name: Some(name.to_string()),
@@ -205,8 +214,8 @@ where
         }
     }
 
-    pub fn on_schedule(self, schedule: Schedule) -> InstallSpec<Path, Name, Set, InstallType> {
-        InstallSpec {
+    pub fn on_schedule(self, schedule: Schedule) -> Spec<Path, Name, Set, InstallType> {
+        Spec {
             mode: self.mode,
             path: self.path,
             name: self.name,
@@ -225,8 +234,8 @@ where
         }
     }
 
-    pub fn on_boot(self) -> InstallSpec<Path, Name, Set, InstallType> {
-        InstallSpec {
+    pub fn on_boot(self) -> Spec<Path, Name, Set, InstallType> {
+        Spec {
             mode: self.mode,
             path: self.path,
             name: self.name,

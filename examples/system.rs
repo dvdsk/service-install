@@ -1,7 +1,7 @@
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-use service_install::{install_system, Schedule};
+use service_install::{install_system, schedule::Schedule};
 use time::Time;
 
 fn main() {
