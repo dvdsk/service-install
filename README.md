@@ -24,7 +24,7 @@ I would love some help to find them though!
 Installing the current program as a user service named *cli* that should run at
 10:42 every day. This does not need superuser/admin permissions.
 
-```rust,no_run
+```rust,ignore
 use service_install::{install_user, schedule::Schedule};
 use time::Time;
 
