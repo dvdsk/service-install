@@ -1,9 +1,9 @@
 > ** Easily provide users an install method**
 
 
-[![Crates.io](https://img.shields.io/crates/v/service-install?style=flat-square)](https://crates.io/crates/dbstruct)
-[![Crates.io](https://img.shields.io/crates/d/service-install?style=flat-square)](https://crates.io/crates/dbstruct)
-[![API](https://docs.rs/service-install/badge.svg)](https://docs.rs/dbstruct)
+[![Crates.io](https://img.shields.io/crates/v/service-install?style=flat-square)](https://crates.io/crates/service-install)
+[![Crates.io](https://img.shields.io/crates/d/service-install?style=flat-square)](https://crates.io/crates/service-install)
+[![API](https://docs.rs/service-install/badge.svg)](https://docs.rs/service-install)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE-MIT)
 
 **Note this is an early release, there might be bugs**
