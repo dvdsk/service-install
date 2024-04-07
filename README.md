@@ -1,6 +1,5 @@
 > ** Easily provide users an install method**
 
-
 [![Crates.io](https://img.shields.io/crates/v/service-install?style=flat-square)](https://crates.io/crates/service-install)
 [![Crates.io](https://img.shields.io/crates/d/service-install?style=flat-square)](https://crates.io/crates/service-install)
 [![API](https://docs.rs/service-install/badge.svg)](https://docs.rs/service-install)
@@ -8,17 +7,22 @@
 
 **Note this is an early release, there might be bugs**
 
-I would love some help to find them though!
+This crate provides the building blocks to build an installer for self contained
+binaries without runtime dependencies. Such an installer provides less technical
+users with an easy way to set up your program. It is not a full alternative for
+integrating with a package manager. For example there is no way to provide
+updates. Building your own installer is however significantly less work then
+trying to get your application in all the linux package managers. It is also
+ideal for tools that are not public. 
 
 ### Features
- - Install the service to run on boot or a schedule
+ - Set up a service to run the application on boot or a schedule
  - Perform the install step by step or in one go
  - Print each step or all at once (or make a tui/prompt!)
  - Roll back on failure
- - Configure the location or let us find a suitable one on the system
- - Uses systemd or cron
+ - Configure the install location or find a suitable one automatically
  - Specify which user the service should run as
- - Undo de installation tearing down the service and removing the files
+ - Undo the installation tearing down the service and removing the files
 
 ### Example
 Installing the current program as a user service named *cli* that should run at
