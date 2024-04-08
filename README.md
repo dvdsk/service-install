@@ -48,8 +48,7 @@ fn main() {
 For more detailed examples (such as a working Tui/Prompt) see 
 
 ### Future work
- - Offer a pre build TUI/Prompt. That would allow the end user to go through the
-   install interactively.
+ - Make the pre build TUI/Prompt more customizable.
  - Windows support (could use some help here, not a big windows user myself)
 
 ### Contribution

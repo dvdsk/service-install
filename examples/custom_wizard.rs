@@ -14,7 +14,7 @@ fn main() {
     let mut rollback_steps = Vec::new();
     for mut step in steps {
         if !Confirm::new()
-            .with_prompt(format!("{}?", step.describe(Tense::Present)))
+            .with_prompt(format!("{}?", step.describe(Tense::Question)))
             .interact()
             .unwrap()
         {

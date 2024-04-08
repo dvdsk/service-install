@@ -177,18 +177,18 @@ pub trait RollbackStep {
     /// The system could have changed between the install and the rollback.
     /// Leading to various errors, mostly IO.
     fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>>;
-    fn describe(&self) -> String;
+    fn describe(&self, tense: Tense) -> String;
 }
 
 impl std::fmt::Debug for &dyn RollbackStep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.describe())
+        write!(f, "{}", self.describe(Tense::Future))
     }
 }
 
 impl Display for &dyn RollbackStep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.describe())
+        write!(f, "{}", self.describe(Tense::Future))
     }
 }
 
@@ -197,8 +197,8 @@ impl<T: RemoveStep> RollbackStep for T {
         self.perform()
     }
 
-    fn describe(&self) -> String {
-        self.describe(Tense::Past)
+    fn describe(&self, tense: Tense) -> String {
+        self.describe(tense)
     }
 }
 

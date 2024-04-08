@@ -113,6 +113,7 @@ impl RemoveStep for RemoveInstalled {
             Tense::Past => "Removed",
             Tense::Present => "Removing",
             Tense::Future => "Will remove",
+            Tense::Question => "Remove",
         };
         let user = self
             .user
@@ -127,6 +128,7 @@ impl RemoveStep for RemoveInstalled {
             Tense::Past => "Removed",
             Tense::Present => "Removing",
             Tense::Future => "Will remove",
+            Tense::Question => "Remove",
         };
         let user = self
             .user

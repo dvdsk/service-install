@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::install::RemoveStep;
 
-use super::{Mode, RollbackStep, InstallStep, Tense};
+use super::{InstallStep, Mode, RollbackStep, Tense};
 
 #[derive(thiserror::Error, Debug)]
 pub enum MoveError {
@@ -18,6 +18,8 @@ pub enum MoveError {
     SourceNotFile,
     #[error("could not move binary to install location: {0}")]
     IO(#[from] std::io::Error),
+    #[error("there is already a file named {name} at {}", dir.display())]
+    TargetExists { name: String, dir: PathBuf },
 }
 
 fn system_dir() -> Option<PathBuf> {
@@ -59,6 +61,7 @@ impl InstallStep for Move {
             Tense::Past => "Copied",
             Tense::Present => "Copying",
             Tense::Future => "Will copy",
+            Tense::Question => "Copy",
         };
         let name = self.name.to_string_lossy();
         let source = self
@@ -79,6 +82,7 @@ impl InstallStep for Move {
             Tense::Past => "Copied",
             Tense::Present => "Copying",
             Tense::Future => "Will copy",
+            Tense::Question => "Copy",
         };
         let name = self.name.to_string_lossy();
         let target = self
@@ -104,7 +108,7 @@ struct SetRootOwner {
 impl InstallStep for SetRootOwner {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            Tense::Past => "Set",
+            Tense::Past | Tense::Question => "Set",
             Tense::Present => "Setting",
             Tense::Future => "Will set",
         };
@@ -136,6 +140,7 @@ impl InstallStep for SetReadOnly {
             Tense::Past => "Made",
             Tense::Present => "Making",
             Tense::Future => "Will make",
+            Tense::Question => "Make",
         };
         format!("{verb} the executable read only")
     }
@@ -162,6 +167,13 @@ pub(crate) fn move_files(source: PathBuf, mode: Mode) -> Result<(Steps, PathBuf)
         .ok_or(MoveError::SourceNotFile)?
         .to_owned();
     let target = dir.join(&name);
+
+    if target.is_file() {
+        return Err(MoveError::TargetExists {
+            name: name.to_string_lossy().to_string(),
+            dir,
+        });
+    }
 
     let mut steps = vec![
         Box::new(Move {
@@ -213,6 +225,7 @@ impl RemoveStep for Remove {
             Tense::Past => "Removed",
             Tense::Present => "Removing",
             Tense::Future => "Will remove",
+            Tense::Question => "Remove",
         };
         let bin = self
             .target
@@ -227,6 +240,7 @@ impl RemoveStep for Remove {
             Tense::Past => "Removed",
             Tense::Present => "Removing",
             Tense::Future => "Will remove",
+            Tense::Question => "Remove",
         };
         let bin = self
             .target

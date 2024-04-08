@@ -7,16 +7,16 @@ use dialoguer::Select;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("The install was canceld by the user")]
+    #[error("canceld by the user")]
     Canceld,
-    #[error("Could not get input from the user: {0}")]
+    #[error("could not get input from the user: {0}")]
     UserInputFailed(#[from] dialoguer::Error),
-    #[error("Install ran into one or more errors, user chose to abort")]
+    #[error("ran into one or more errors, user chose to abort")]
     AbortedAfterError(Vec<Box<dyn std::error::Error>>),
-    #[error("User chose to cancel and rollback however rollback failed: {0}")]
+    #[error("user chose to cancel and rollback however rollback failed: {0}")]
     RollbackFollowingCancel(Box<dyn std::error::Error>),
     #[error(
-        "Install ran into error user chose to abort and rollback however rollback failed: {0}"
+        "ran into error user chose to abort and rollback however rollback failed: {0}"
     )]
     RollbackFollowingError(Box<dyn std::error::Error>),
 }
@@ -26,7 +26,7 @@ pub enum Error {
 /// step. If anything goes wrong the user will be prompted if they wish to
 /// abort, abort and try to roll back the changes made or continue.
 ///
-/// # Errors 
+/// # Errors
 /// This returns an error if the user canceld the removal, something
 /// went wrong getting user input or anything during the removal failed.
 ///
@@ -41,10 +41,8 @@ pub fn start(steps: InstallSteps) -> Result<(), Error> {
     let mut errors = Vec::new();
     let mut rollback_steps = Vec::new();
     for mut step in steps {
-        if !Confirm::new()
-            .with_prompt(format!("{}?", step.describe(Tense::Present)))
-            .interact()?
-        {
+        println!("{}", step.describe(Tense::Question));
+        if !Confirm::new().interact()? {
             rollback_if_user_wants_to(rollback_steps)?;
             return Err(Error::Canceld);
         }
@@ -53,10 +51,14 @@ pub fn start(steps: InstallSteps) -> Result<(), Error> {
             Ok(None) => (),
             Ok(Some(rollback)) => rollback_steps.push(rollback),
             Err(e) => {
+                let details = e.to_string().replace('\n', "\n\t");
                 errors.push(e);
+
+                println!("An error occurred, details:\n\t{details}\t");
                 match Select::new()
-                    .with_prompt("Error happened during installation.")
+                    .with_prompt("What do you want to do?")
                     .items(&["rollback and abort", "abort", "continue"])
+                    .default(0)
                     .interact()?
                 {
                     2 => continue,
@@ -88,7 +90,7 @@ fn rollback(
     mut rollback_steps: Vec<Box<dyn RollbackStep>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     for step in &mut rollback_steps {
-        let did = step.describe();
+        let did = step.describe(Tense::Past);
         step.perform()?;
         println!("{did}");
     }

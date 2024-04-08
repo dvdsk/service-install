@@ -4,6 +4,7 @@ use std::process::{Command, Stdio};
 
 use super::{Params, SetupError, Steps};
 use crate::install::RollbackStep;
+use crate::Tense;
 
 pub mod setup;
 pub mod teardown;
@@ -32,8 +33,8 @@ impl RollbackStep for RollbackImpossible {
         Err(Box::new(RollbackImpossibleErr))
     }
 
-    fn describe(&self) -> String {
-        "Rollback of cron setup is not possible, check crontab manually".to_string()
+    fn describe(&self, _: Tense) -> String {
+        "Rollback of cron setup is not possible.\n\tsuggestion: inspect and fix crontab manually\n\tnote: you can safely edit crontab using `crontab -e`".to_string()
     }
 }
 
