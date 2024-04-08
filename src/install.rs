@@ -45,6 +45,7 @@ impl Display for Mode {
 }
 
 /// Errors that can occur when preparing for or performing an installation
+#[allow(clippy::module_name_repetitions)]
 #[derive(thiserror::Error, Debug)]
 pub enum InstallError {
     #[error("Error setting up init: {0}")]
@@ -94,6 +95,7 @@ pub enum RemoveError {
 }
 
 /// One step in the install process. Can be executed or described.
+#[allow(clippy::module_name_repetitions)]
 pub trait InstallStep {
     /// A short (one line) description of what this performing this step will
     /// do. Pass in the tense you want for the description (past, present or
@@ -206,6 +208,7 @@ impl<T: RemoveStep> RollbackStep for T {
 /// [`install()`](InstallSteps::install) to apply all changes at once. This
 /// implements [`IntoIterator`] yielding [`InstallSteps`](InstallStep). These
 /// steps can be described possibly in detail and/or performed one by one.
+#[allow(clippy::module_name_repetitions)]
 pub struct InstallSteps(pub(crate) Vec<Box<dyn InstallStep>>);
 
 impl std::fmt::Debug for InstallSteps {
