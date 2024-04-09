@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-mod cron;
-mod systemd;
+pub mod cron;
+pub mod systemd;
 pub(crate) mod extract_path;
 
 pub use systemd::FindExeError;

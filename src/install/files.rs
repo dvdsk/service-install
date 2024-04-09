@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::install::RemoveStep;
 
-use super::{InstallStep, Mode, RollbackStep, Tense};
+use super::{InstallStep, Mode, RemoveError, RollbackStep, Tense};
 
 #[derive(thiserror::Error, Debug)]
 pub enum MoveError {
@@ -255,10 +255,9 @@ impl RemoveStep for Remove {
         format!("{verb} installed executable `{bin}` at:\n|\t{dir}")
     }
 
-    fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<(), RemoveError> {
         std::fs::remove_file(&self.target)
             .map_err(DeleteError::IO)
-            .map_err(Box::new)
             .map_err(Into::into)
     }
 }

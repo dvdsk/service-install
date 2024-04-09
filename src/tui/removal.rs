@@ -1,6 +1,6 @@
 use dialoguer::Confirm;
 
-use crate::install::RemoveSteps;
+use crate::install::{RemoveError, RemoveSteps};
 use crate::Tense;
 
 use dialoguer;
@@ -10,9 +10,9 @@ pub enum Error {
     #[error("The removal was canceld by the user")]
     Canceld,
     #[error("User aborted removal after one or more errors happened, errors: {0:?}")]
-    AbortedAfterError(Vec<Box<dyn std::error::Error>>),
+    AbortedAfterError(Vec<RemoveError>),
     #[error("Removal done however one or more errors happened, errors: {0:?}")]
-    CompletedWithErrors(Vec<Box<dyn std::error::Error>>),
+    CompletedWithErrors(Vec<RemoveError>),
     #[error("Could not get input from the user: {0}")]
     UserInputFailed(#[from] dialoguer::Error),
 }

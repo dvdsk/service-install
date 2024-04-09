@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use crate::install::init::RSteps;
 use crate::install::Mode;
+use crate::install::RemoveError;
 use crate::install::RemoveStep;
 use crate::install::Tense;
 
@@ -24,11 +25,9 @@ impl RemoveStep for RemoveService {
         format!("{verb} systemd service unit at:\n\t{path}")
     }
 
-    fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        fs::remove_file(&self.path)
-            .map_err(Error::Removing)
-            .map_err(Box::new)
-            .map_err(Into::into)
+    fn perform(&mut self) -> Result<(), RemoveError> {
+        fs::remove_file(&self.path).map_err(Error::Removing)?;
+        Ok(())
     }
 }
 
@@ -48,12 +47,10 @@ impl RemoveStep for DisableService {
         format!("{verb} systemd {} service: {}", self.mode, self.name)
     }
 
-    fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<(), RemoveError> {
         let name = self.name.clone() + ".service";
-        disable(&name, self.mode)
-            .map_err(Error::SystemCtl)
-            .map_err(Box::new)
-            .map_err(Into::into)
+        disable(&name, self.mode).map_err(Error::SystemCtl)?;
+        Ok(())
     }
 }
 
@@ -73,11 +70,9 @@ impl RemoveStep for RemoveTimer {
         format!("{verb} systemd timer at:\n\t{path}")
     }
 
-    fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        fs::remove_file(self.path.clone())
-            .map_err(Error::Removing)
-            .map_err(Box::new)
-            .map_err(Into::into)
+    fn perform(&mut self) -> Result<(), RemoveError> {
+        fs::remove_file(self.path.clone()).map_err(Error::Removing)?;
+        Ok(())
     }
 }
 
@@ -97,12 +92,10 @@ impl RemoveStep for DisableTimer {
         format!("{verb} systemd {} timer: {}", self.mode, self.name)
     }
 
-    fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<(), RemoveError> {
         let name = self.name.clone() + ".timer";
-        disable(&name, self.mode)
-            .map_err(Error::SystemCtl)
-            .map_err(Box::new)
-            .map_err(Into::into)
+        disable(&name, self.mode).map_err(Error::SystemCtl)?;
+        Ok(())
     }
 }
 

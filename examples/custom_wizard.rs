@@ -45,4 +45,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // lets remove the install to prevent polluting the system
     install_user!().name("cli").prepare_remove()?.best_effort_remove()?;
+    Ok(())
 }

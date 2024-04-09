@@ -23,7 +23,7 @@ pub enum Mode {
     User,
     /// install to the entire system, the installation/removal must be ran as
     /// superuser/admin or it will return
-    /// [`InstallError::NeedRootForSysInstall`] or [`RemoveError::NeedRoot`]
+    /// [`InstallError::NeedRootForSysInstall`] or [`PrepareRemoveError::NeedRoot`]
     System,
 }
 
@@ -82,7 +82,7 @@ pub struct InitSystemFailure {
 
 /// Errors that can occur when preparing for or removing an installation
 #[derive(thiserror::Error, Debug)]
-pub enum RemoveError {
+pub enum PrepareRemoveError {
     #[error("Could not find this executable's location: {0}")]
     GetExeLocation(std::io::Error),
     #[error("Failed to remove files: {0}")]
@@ -133,6 +133,20 @@ impl Display for &dyn InstallStep {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum RemoveError {
+    #[error("Could not get crontab, needed tot filter out our added lines, error: {0}")]
+    GetCrontab(#[from] init::cron::GetCrontabError),
+    #[error("{0}")]
+    CrontabChanged(#[from] init::cron::teardown::CrontabChanged),
+    #[error("Could not set crontab, needed tot filter out our added lines, error: {0}")]
+    SetCrontab(#[from] init::cron::SetCrontabError),
+    #[error("Could not remove file(s)")]
+    DeleteError(#[from] files::DeleteError),
+    #[error("Something went wrong interacting with systemd: {0}")]
+    Systemd(#[from] init::systemd::Error)
+}
+
 /// One step in the remove process. Can be executed or described.
 pub trait RemoveStep {
     /// A short (one line) description of what this performing this step will
@@ -153,7 +167,7 @@ pub trait RemoveStep {
     /// the install. For example a file could have been removed by the user of
     /// the system. Or the removal could run into an error that was not checked
     /// for while preparing. If you find this happens please make an issue.
-    fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>>;
+    fn perform(&mut self) -> Result<(), RemoveError>;
 }
 
 impl std::fmt::Debug for &dyn RemoveStep {
@@ -195,7 +209,7 @@ impl Display for &dyn RollbackStep {
 
 impl<T: RemoveStep> RollbackStep for T {
     fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.perform()
+        Ok(self.perform()?)
     }
 
     fn describe(&self, tense: Tense) -> String {
@@ -437,7 +451,7 @@ impl RemoveSteps {
 
 #[derive(Debug, thiserror::Error)]
 pub struct BestEffortRemoveError {
-    failures: Vec<(String, Box<dyn std::error::Error>)>,
+    failures: Vec<(String, RemoveError)>,
 }
 
 impl Display for BestEffortRemoveError {
@@ -463,7 +477,7 @@ impl<P: ToAssign, T: ToAssign, I: ToAssign> Spec<P, builder::Set, T, I> {
     ///  - trying to remove a system install while not running as admin/superuser
     ///  - no install is found
     ///  - anything goes wrong setting up the removal
-    pub fn prepare_remove(self) -> Result<RemoveSteps, RemoveError> {
+    pub fn prepare_remove(self) -> Result<RemoveSteps, PrepareRemoveError> {
         let builder::Spec {
             mode,
             name: Some(name),
@@ -477,14 +491,14 @@ impl<P: ToAssign, T: ToAssign, I: ToAssign> Spec<P, builder::Set, T, I> {
 
         if let Mode::System = mode {
             if let sudo::RunningAs::User = sudo::check() {
-                return Err(RemoveError::NeedRoot);
+                return Err(PrepareRemoveError::NeedRoot);
             }
         }
 
         let mut inits = self.init_systems.unwrap_or(init::System::all()).into_iter();
         let (mut steps, path) = loop {
             let Some(init) = inits.next() else {
-                return Err(RemoveError::NoInstallFound);
+                return Err(PrepareRemoveError::NoInstallFound);
             };
 
             if let Some(install) = init.tear_down_steps(&name, bin_name, mode, run_as.as_deref())? {
