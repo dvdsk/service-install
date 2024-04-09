@@ -7,14 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+# Version 0.3.0 (2024-4-9)
+
 ### Changed
 - Tense Question is now called Active
+- Removed all `Box<dyn Error>` in favor of a tree of enum errors
 
 ### Added 
 - Added `best_effort_remove` function. A version of `remove` that continues on
   errors and returns what failed and the why (the error).
 
-# Version 0.2.0 (2023-10-23)
+# Version 0.2.0 (2024-4-2)
 
 ### Changed
 - Tense now also has the option Question which will turn the step descriptions
