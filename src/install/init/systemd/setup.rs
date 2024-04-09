@@ -25,7 +25,7 @@ impl InstallStep for Service {
             Tense::Past => "Wrote",
             Tense::Present => "Writing",
             Tense::Future => "Will write",
-            Tense::Question => "Write",
+            Tense::Active => "Write",
         };
         let path = self.path.display();
         format!("{verb} systemd service unit to:\n\t{path}")
@@ -36,7 +36,7 @@ impl InstallStep for Service {
             Tense::Past => "Wrote",
             Tense::Present => "Writing",
             Tense::Future => "Will write",
-            Tense::Question => "Write",
+            Tense::Active => "Write",
         };
         let path = self.path.display();
         let content = self.unit.replace('\n', "\n\t");
@@ -67,7 +67,7 @@ impl InstallStep for Timer {
             Tense::Past => "Wrote",
             Tense::Present => "Writing",
             Tense::Future => "Will write",
-            Tense::Question => "Write",
+            Tense::Active => "Write",
         };
         let path = self.path.display();
         format!("{verb} systemd timer unit to:\n\t{path}")
@@ -78,7 +78,7 @@ impl InstallStep for Timer {
             Tense::Past => "Wrote",
             Tense::Present => "Writing",
             Tense::Future => "Will write",
-            Tense::Question => "Write",
+            Tense::Active => "Write",
         };
         let path = self.path.display();
         let content = self.unit.replace('\n', "\n\t");
@@ -109,7 +109,7 @@ impl InstallStep for EnableTimer {
             Tense::Past => "Enabled",
             Tense::Present => "Enabling",
             Tense::Future => "Will Enable",
-            Tense::Question => "Enable",
+            Tense::Active => "Enable",
         };
         format!("{verb} systemd {} timer: {}", self.mode, self.name)
     }
@@ -137,7 +137,7 @@ impl InstallStep for EnableService {
             Tense::Past => "Enabled",
             Tense::Present => "Enabling",
             Tense::Future => "Will Enable",
-            Tense::Question => "Enable",
+            Tense::Active => "Enable",
         };
         format!("{verb} systemd {} service: {}", self.mode, self.name)
     }

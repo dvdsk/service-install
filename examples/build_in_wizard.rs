@@ -19,5 +19,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = tui::install::start(steps) {
         eprintln!("Install failed: {e}")
     }
+
+    // lets remove the install to prevent polluting the system
+    install_user!().name("cli").prepare_remove()?.best_effort_remove()?;
+
     Ok(())
 }

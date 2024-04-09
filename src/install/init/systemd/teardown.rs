@@ -18,7 +18,7 @@ impl RemoveStep for RemoveService {
             Tense::Past => "Removed",
             Tense::Present => "Removing",
             Tense::Future => "Will remove",
-            Tense::Question => "Remove",
+            Tense::Active => "Remove",
         };
         let path = self.path.display();
         format!("{verb} systemd service unit at:\n\t{path}")
@@ -43,7 +43,7 @@ impl RemoveStep for DisableService {
             Tense::Past => "Disabled",
             Tense::Present => "Disabling",
             Tense::Future => "Will disable",
-            Tense::Question => "Disable",
+            Tense::Active => "Disable",
         };
         format!("{verb} systemd {} service: {}", self.mode, self.name)
     }
@@ -67,7 +67,7 @@ impl RemoveStep for RemoveTimer {
             Tense::Past => "Removed",
             Tense::Present => "Removing",
             Tense::Future => "Will remove",
-            Tense::Question => "Remove",
+            Tense::Active => "Remove",
         };
         let path = self.path.display();
         format!("{verb} systemd timer at:\n\t{path}")
@@ -92,7 +92,7 @@ impl RemoveStep for DisableTimer {
             Tense::Past => "Disabled",
             Tense::Present => "Disabling",
             Tense::Future => "Will disable",
-            Tense::Question => "Disable",
+            Tense::Active => "Disable",
         };
         format!("{verb} systemd {} timer: {}", self.mode, self.name)
     }

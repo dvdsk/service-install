@@ -61,7 +61,7 @@ impl InstallStep for Move {
             Tense::Past => "Copied",
             Tense::Present => "Copying",
             Tense::Future => "Will copy",
-            Tense::Question => "Copy",
+            Tense::Active => "Copy",
         };
         let name = self.name.to_string_lossy();
         let source = self
@@ -82,7 +82,7 @@ impl InstallStep for Move {
             Tense::Past => "Copied",
             Tense::Present => "Copying",
             Tense::Future => "Will copy",
-            Tense::Question => "Copy",
+            Tense::Active => "Copy",
         };
         let name = self.name.to_string_lossy();
         let target = self
@@ -108,7 +108,7 @@ struct SetRootOwner {
 impl InstallStep for SetRootOwner {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            Tense::Past | Tense::Question => "Set",
+            Tense::Past | Tense::Active => "Set",
             Tense::Present => "Setting",
             Tense::Future => "Will set",
         };
@@ -140,7 +140,7 @@ impl InstallStep for SetReadOnly {
             Tense::Past => "Made",
             Tense::Present => "Making",
             Tense::Future => "Will make",
-            Tense::Question => "Make",
+            Tense::Active => "Make",
         };
         format!("{verb} the executable read only")
     }
@@ -225,7 +225,7 @@ impl RemoveStep for Remove {
             Tense::Past => "Removed",
             Tense::Present => "Removing",
             Tense::Future => "Will remove",
-            Tense::Question => "Remove",
+            Tense::Active => "Remove",
         };
         let bin = self
             .target
@@ -240,7 +240,7 @@ impl RemoveStep for Remove {
             Tense::Past => "Removed",
             Tense::Present => "Removing",
             Tense::Future => "Will remove",
-            Tense::Question => "Remove",
+            Tense::Active => "Remove",
         };
         let bin = self
             .target

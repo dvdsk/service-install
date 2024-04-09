@@ -41,7 +41,7 @@ pub fn start(steps: InstallSteps) -> Result<(), Error> {
     let mut errors = Vec::new();
     let mut rollback_steps = Vec::new();
     for mut step in steps {
-        println!("{}", step.describe(Tense::Question));
+        println!("{}", step.describe(Tense::Active));
         if !Confirm::new().interact()? {
             rollback_if_user_wants_to(rollback_steps)?;
             return Err(Error::Canceld);

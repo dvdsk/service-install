@@ -7,7 +7,7 @@ pub enum Tense {
     Past,
     Present,
     Future,
-    Question,
+    Active,
 }
 
 #[cfg(feature = "tui")]

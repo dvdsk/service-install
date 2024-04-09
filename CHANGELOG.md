@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Tense Question is now called Active
+
+### Added 
+- Added `best_effort_remove` function. A version of `remove` that continues on
+  errors and returns what failed and the why (the error).
+
 # Version 0.2.0 (2023-10-23)
 
 ### Changed

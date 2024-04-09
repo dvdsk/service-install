@@ -100,7 +100,7 @@ impl InstallStep for Add {
             Tense::Past => "Appended",
             Tense::Present => "Appending",
             Tense::Future => "Will append",
-            Tense::Question => "Append",
+            Tense::Active => "Append",
         };
         if let Some(run_as) = &self.user {
             format!("{verb} comment and rule to {run_as}'s crontab")
@@ -114,7 +114,7 @@ impl InstallStep for Add {
             Tense::Past => "Appended",
             Tense::Present => "Appending",
             Tense::Future => "Will append",
-            Tense::Question => "Append",
+            Tense::Active => "Append",
         };
         let Self {
             comment,
@@ -163,7 +163,7 @@ impl InstallStep for RemovePrevious {
             Tense::Past => "Removed",
             Tense::Present => "Removing",
             Tense::Future => "Will remove",
-            Tense::Question => "Remove",
+            Tense::Active => "Remove",
         };
         let user = self
             .user
@@ -178,7 +178,7 @@ impl InstallStep for RemovePrevious {
             Tense::Past => "Removed",
             Tense::Present => "Removing",
             Tense::Future => "Will remove",
-            Tense::Question => "Remove",
+            Tense::Active => "Remove",
         };
         let user = self
             .user

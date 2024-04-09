@@ -8,6 +8,7 @@ use std::ffi::OsString;
 use std::fmt::Display;
 
 pub use builder::Spec;
+use itertools::{Either, Itertools};
 
 use crate::Tense;
 
@@ -65,7 +66,7 @@ pub enum InstallError {
 }
 
 /// The init system was found and we tried to set up the service but ran into an
-/// error. 
+/// error.
 ///
 /// When there is another init system that does work this error is ignored. If
 /// no other system is available or there is but it/they fail too this error is
@@ -391,7 +392,8 @@ impl IntoIterator for RemoveSteps {
 }
 
 impl RemoveSteps {
-    /// Perform all steps needed to remove an installation.
+    /// Perform all steps needed to remove an installation. Report what was done
+    /// at the end. Aborts on error.
     ///
     /// # Errors
     /// The system can change between preparing to remove and actually removing
@@ -406,6 +408,47 @@ impl RemoveSteps {
         }
 
         Ok(description.join("\n"))
+    }
+
+    /// Perform all steps needed to remove an installation. If any fail keep
+    /// going. Collect all the errors and report them at the end.
+    ///
+    /// # Errors
+    /// The system can change between preparing to remove and actually removing
+    /// the install. For example a file could have been removed by the user of
+    /// the system. Or the removal could run into an error that was not checked
+    /// for while preparing. If you find this happens please make an issue.
+    pub fn best_effort_remove(self) -> Result<String, BestEffortRemoveError> {
+        let (description, failures): (Vec<_>, Vec<_>) =
+            self.0
+                .into_iter()
+                .partition_map(|mut step| match step.perform() {
+                    Ok(()) => Either::Left(step.describe(Tense::Past)),
+                    Err(e) => Either::Right((step.describe_detailed(Tense::Active), e)),
+                });
+
+        if failures.is_empty() {
+            Ok(description.join("\n"))
+        } else {
+            Err(BestEffortRemoveError { failures })
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub struct BestEffortRemoveError {
+    failures: Vec<(String, Box<dyn std::error::Error>)>,
+}
+
+impl Display for BestEffortRemoveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Ran into one or more issues trying to remove an install")?;
+        writeln!(f, "You should resolve/check these issues manually")?;
+        for (task, error) in &self.failures {
+            let task = task.to_lowercase();
+            writeln!(f, "* Tried to {task}\nfailed because: {error}")?;
+        }
+        Ok(())
     }
 }
 
