@@ -16,20 +16,12 @@ use super::{current_crontab, set_crontab, GetCrontabError};
 pub enum Error {
     #[error("Could not get the current crontab: {0}")]
     GetCrontab(#[from] GetCrontabError),
-    // #[error("Failed to extract the path to the executable from crontab: {0}")]
-    // NoExistingInstallFound(#[from] extract_path::Error),
     #[error("Comment for previous install at the end of the crontab")]
     CrontabCorrupt,
     #[error("{0}")]
     CrontabChanged(#[from] CrontabChanged),
     #[error("Rule in crontab corrupt, too short")]
     CorruptTooShort,
-    // #[error("No rule from previous install in crontab")]
-    // NoRule,
-    // #[error("The command in crontab should not be empty/length zero")]
-    // EmptyCommand,
-    // #[error("The command is shell escaped but the second escape character is missing")]
-    // EscapedEndMissing,
 }
 
 fn from_rule(rule: &str) -> PathBuf {
