@@ -1,4 +1,4 @@
-use crate::install::{init, RollbackStep, Tense};
+use crate::install::{init, InstallError, RollbackStep, Tense};
 use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -43,13 +43,12 @@ impl InstallStep for Service {
         format!("{verb} systemd service unit to:\n\t{path}\ncontent:\n\t{content}")
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
         write_unit(&self.path, &self.unit)
             .map_err(|e| Error::Writing {
                 e,
                 path: self.path.clone(),
-            })
-            .map_err(Box::new)?;
+            })?;
         Ok(Some(Box::new(teardown::RemoveService {
             path: self.path.clone(),
         })))
@@ -85,13 +84,12 @@ impl InstallStep for Timer {
         format!("{verb} systemd timer unit to:\n\t{path}\ncontent:\n\t{content}")
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
         write_unit(&self.path, &self.unit)
             .map_err(|e| Error::Writing {
                 e,
                 path: self.path.clone(),
-            })
-            .map_err(Box::new)?;
+            })?;
         Ok(Some(Box::new(teardown::RemoveTimer {
             path: self.path.clone(),
         })))
@@ -114,11 +112,10 @@ impl InstallStep for EnableTimer {
         format!("{verb} systemd {} timer: {}", self.mode, self.name)
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
         let name = self.name.clone() + ".timer";
         super::enable(&name, self.mode)
-            .map_err(Error::SystemCtl)
-            .map_err(Box::new)?;
+            .map_err(Error::SystemCtl)?;
         Ok(Some(Box::new(DisableTimer {
             name: self.name.clone(),
             mode: self.mode,
@@ -142,11 +139,10 @@ impl InstallStep for EnableService {
         format!("{verb} systemd {} service: {}", self.mode, self.name)
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
         let name = self.name.clone() + ".service";
         super::enable(&name, self.mode)
-            .map_err(Error::SystemCtl)
-            .map_err(Box::new)?;
+            .map_err(Error::SystemCtl)?;
         Ok(Some(Box::new(teardown::DisableService {
             name: self.name.clone(),
             mode: self.mode,

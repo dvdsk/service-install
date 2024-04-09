@@ -3,7 +3,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 use super::{Params, SetupError, Steps};
-use crate::install::RollbackStep;
+use crate::install::{RollbackError, RollbackStep};
 use crate::Tense;
 
 pub mod setup;
@@ -24,13 +24,9 @@ pub(super) fn not_available() -> bool {
 }
 
 struct RollbackImpossible;
-#[derive(Debug, thiserror::Error)]
-#[error("Can not rollback setting up cron, must be done manually")]
-struct RollbackImpossibleErr;
-
 impl RollbackStep for RollbackImpossible {
-    fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        Err(Box::new(RollbackImpossibleErr))
+    fn perform(&mut self) -> Result<(), RollbackError> {
+        Err(RollbackError::Impossible)
     }
 
     fn describe(&self, _: Tense) -> String {

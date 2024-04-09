@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::install::RemoveStep;
 
-use super::{InstallStep, Mode, RemoveError, RollbackStep, Tense};
+use super::{InstallError, InstallStep, Mode, RemoveError, RollbackStep, Tense};
 
 #[derive(thiserror::Error, Debug)]
 pub enum MoveError {
@@ -93,8 +93,8 @@ impl InstallStep for Move {
         format!("{verb} executable `{name}` to:\n\t{target}")
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
-        std::fs::copy(&self.source, &self.target)?;
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
+        std::fs::copy(&self.source, &self.target).map_err(InstallError::CopyExe)?;
         Ok(Some(Box::new(Remove {
             target: self.target.clone(),
         })))
@@ -115,9 +115,10 @@ impl InstallStep for SetRootOwner {
         format!("{verb} executables owner to root")
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
         const ROOT: u32 = 0;
-        std::os::unix::fs::chown(&self.path, Some(ROOT), Some(ROOT))?;
+        std::os::unix::fs::chown(&self.path, Some(ROOT), Some(ROOT))
+            .map_err(InstallError::SetRootOwner)?;
         Ok(None)
     }
 }
@@ -145,7 +146,7 @@ impl InstallStep for SetReadOnly {
         format!("{verb} the executable read only")
     }
 
-    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
         let mut permissions = fs::metadata(&self.path)
             .map_err(SetReadOnlyError::GetPermissions)?
             .permissions();

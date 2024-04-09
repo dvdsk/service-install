@@ -1,4 +1,6 @@
+use crate::install::InstallError;
 use crate::install::InstallSteps;
+use crate::install::RollbackError;
 use crate::install::RollbackStep;
 use crate::Tense;
 
@@ -12,13 +14,11 @@ pub enum Error {
     #[error("could not get input from the user: {0}")]
     UserInputFailed(#[from] dialoguer::Error),
     #[error("ran into one or more errors, user chose to abort")]
-    AbortedAfterError(Vec<Box<dyn std::error::Error>>),
+    AbortedAfterError(Vec<InstallError>),
     #[error("user chose to cancel and rollback however rollback failed: {0}")]
-    RollbackFollowingCancel(Box<dyn std::error::Error>),
-    #[error(
-        "ran into error user chose to abort and rollback however rollback failed: {0}"
-    )]
-    RollbackFollowingError(Box<dyn std::error::Error>),
+    RollbackFollowingCancel(RollbackError),
+    #[error("ran into error user chose to abort and rollback however rollback failed: {0}")]
+    RollbackFollowingError(RollbackError),
 }
 
 /// Start an interactive installation wizard using the provided [install
@@ -86,9 +86,7 @@ fn rollback_if_user_wants_to(rollback_steps: Vec<Box<dyn RollbackStep>>) -> Resu
     Ok(())
 }
 
-fn rollback(
-    mut rollback_steps: Vec<Box<dyn RollbackStep>>,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn rollback(mut rollback_steps: Vec<Box<dyn RollbackStep>>) -> Result<(), RollbackError> {
     for step in &mut rollback_steps {
         let did = step.describe(Tense::Past);
         step.perform()?;

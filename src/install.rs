@@ -48,7 +48,7 @@ impl Display for Mode {
 /// Errors that can occur when preparing for or performing an installation
 #[allow(clippy::module_name_repetitions)]
 #[derive(thiserror::Error, Debug)]
-pub enum InstallError {
+pub enum PrepareInstallError {
     #[error("Error setting up init: {0}")]
     Init(#[from] init::SetupError),
     #[error("Failed to move files: {0}")]
@@ -95,6 +95,27 @@ pub enum PrepareRemoveError {
     NeedRoot,
 }
 
+#[allow(clippy::module_name_repetitions)]
+#[derive(Debug, thiserror::Error)]
+pub enum InstallError {
+    #[error("Could not get crontab, needed to add our lines, error: {0}")]
+    GetCrontab(#[from] init::cron::GetCrontabError),
+    #[error("{0}")]
+    CrontabChanged(#[from] init::cron::teardown::CrontabChanged),
+    #[error("Could not set crontab, needed to add our lines, error: {0}")]
+    SetCrontab(#[from] init::cron::SetCrontabError),
+    // #[error("Could not remove old file(s)")]
+    // DeleteError(#[from] files::DeleteError),
+    #[error("Something went wrong interacting with systemd: {0}")]
+    Systemd(#[from] init::systemd::Error),
+    #[error("Could not copy executable")]
+    CopyExe(std::io::Error),
+    #[error("Could not set the owner of the installed executable to be root")]
+    SetRootOwner(std::io::Error),
+    #[error("Could not make the installed executable read only")]
+    SetReadOnly(#[from] files::SetReadOnlyError),
+}
+
 /// One step in the install process. Can be executed or described.
 #[allow(clippy::module_name_repetitions)]
 pub trait InstallStep {
@@ -118,7 +139,7 @@ pub trait InstallStep {
     /// installing. For example all disk space could be used. Or the install
     /// could run into an error that was not checked for while preparing. If you
     /// find this happens please make an issue.
-    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, Box<dyn std::error::Error>>;
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError>;
 }
 
 impl std::fmt::Debug for &dyn InstallStep {
@@ -144,7 +165,7 @@ pub enum RemoveError {
     #[error("Could not remove file(s)")]
     DeleteError(#[from] files::DeleteError),
     #[error("Something went wrong interacting with systemd: {0}")]
-    Systemd(#[from] init::systemd::Error)
+    Systemd(#[from] init::systemd::Error),
 }
 
 /// One step in the remove process. Can be executed or described.
@@ -182,6 +203,14 @@ impl Display for &dyn RemoveStep {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum RollbackError {
+    #[error("Could not rollback error while removing: {0}")]
+    Removing(#[from] RemoveError),
+    #[error("Can not rollback setting up cron, must be done manually")]
+    Impossible,
+}
+
 /// Undoes a [`InstallStep`]. Can be executed or described.
 pub trait RollbackStep {
     /// Executes this rollback step. This can be used when building an install
@@ -191,7 +220,7 @@ pub trait RollbackStep {
     /// # Errors
     /// The system could have changed between the install and the rollback.
     /// Leading to various errors, mostly IO.
-    fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>>;
+    fn perform(&mut self) -> Result<(), RollbackError>;
     fn describe(&self, tense: Tense) -> String;
 }
 
@@ -208,7 +237,7 @@ impl Display for &dyn RollbackStep {
 }
 
 impl<T: RemoveStep> RollbackStep for T {
-    fn perform(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn perform(&mut self) -> Result<(), RollbackError> {
         Ok(self.perform()?)
     }
 
@@ -289,7 +318,7 @@ impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
     ///  - the service should run for a nonexisting user
     ///  - no suitable install directory could be found
     ///  - the path for the executable does not point to a file
-    pub fn prepare_install(self) -> Result<InstallSteps, InstallError> {
+    pub fn prepare_install(self) -> Result<InstallSteps, PrepareInstallError> {
         let builder::Spec {
             mode,
             path: Some(source),
@@ -309,15 +338,15 @@ impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
         let not_root = matches!(sudo::check(), sudo::RunningAs::User);
         if let Mode::System = mode {
             if not_root {
-                return Err(InstallError::NeedRootForSysInstall);
+                return Err(PrepareInstallError::NeedRootForSysInstall);
             }
         }
 
         if let Some(ref user) = run_as {
             let curr_user = uzers::get_current_username()
-                .ok_or_else(|| InstallError::UserDoesNotExist(user.clone()))?;
+                .ok_or_else(|| PrepareInstallError::UserDoesNotExist(user.clone()))?;
             if curr_user != OsString::from(user) && not_root {
-                return Err(InstallError::NeedRootToRunAs);
+                return Err(PrepareInstallError::NeedRootToRunAs);
             }
         }
 
@@ -338,7 +367,7 @@ impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
 
         let mut errors = Vec::new();
         for init in self.init_systems.unwrap_or_else(init::System::all) {
-            if init.not_available().map_err(InstallError::Init)? {
+            if init.not_available().map_err(PrepareInstallError::Init)? {
                 continue;
             }
 
@@ -359,9 +388,9 @@ impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
         }
 
         if errors.is_empty() {
-            Err(InstallError::NoInitSystemRecognized)
+            Err(PrepareInstallError::NoInitSystemRecognized)
         } else {
-            Err(InstallError::SupportedInitSystemFailed(errors))
+            Err(PrepareInstallError::SupportedInitSystemFailed(errors))
         }
     }
 }
