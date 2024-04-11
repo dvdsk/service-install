@@ -1,6 +1,7 @@
 mod builder;
-mod files;
 
+/// Errors and settings related to installing files
+pub mod files;
 /// Errors and settings related to the supported init systems
 pub mod init;
 
@@ -326,6 +327,7 @@ impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
             bin_name,
             args,
             trigger: Some(trigger),
+            overwrite_existing,
             working_dir,
             run_as,
             description,
@@ -350,7 +352,7 @@ impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
             }
         }
 
-        let (mut steps, exe_path) = files::move_files(source, mode)?;
+        let (mut steps, exe_path) = files::move_files(source, mode, overwrite_existing)?;
         let params = init::Params {
             name,
             bin_name,

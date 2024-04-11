@@ -157,7 +157,11 @@ impl InstallStep for SetReadOnly {
 }
 
 type Steps = Vec<Box<dyn InstallStep>>;
-pub(crate) fn move_files(source: PathBuf, mode: Mode) -> Result<(Steps, PathBuf), MoveError> {
+pub(crate) fn move_files(
+    source: PathBuf,
+    mode: Mode,
+    overwrite_existing: bool,
+) -> Result<(Steps, PathBuf), MoveError> {
     let dir = match mode {
         Mode::User => user_dir()?.ok_or(MoveError::UserDirNotAvailable)?,
         Mode::System => system_dir().ok_or(MoveError::SystemDirNotAvailable)?,
@@ -169,7 +173,7 @@ pub(crate) fn move_files(source: PathBuf, mode: Mode) -> Result<(Steps, PathBuf)
         .to_owned();
     let target = dir.join(&name);
 
-    if target.is_file() {
+    if target.is_file() && !overwrite_existing {
         return Err(MoveError::TargetExists {
             name: name.to_string_lossy().to_string(),
             dir,

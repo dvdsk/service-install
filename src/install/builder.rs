@@ -53,6 +53,7 @@ where
     pub(crate) run_as: Option<String>,
     pub(crate) args: Vec<String>,
     pub(crate) bin_name: &'static str,
+    pub(crate) overwrite_existing: bool,
     /// None means all
     pub(crate) init_systems: Option<Vec<init::System>>,
 
@@ -94,6 +95,7 @@ impl Spec<NotSet, NotSet, NotSet, NotSet> {
             run_as: None,
             args: Vec::new(),
             bin_name,
+            overwrite_existing: false,
             init_systems: None,
 
             path_set: PhantomData {},
@@ -118,6 +120,7 @@ impl Spec<NotSet, NotSet, NotSet, NotSet> {
             run_as: None,
             args: Vec::new(),
             bin_name,
+            overwrite_existing: false,
             init_systems: None,
 
             path_set: PhantomData {},
@@ -159,6 +162,7 @@ where
             run_as: self.run_as,
             args: self.args,
             bin_name: self.bin_name,
+            overwrite_existing: self.overwrite_existing,
             init_systems: self.init_systems,
 
             path_set: PhantomData {},
@@ -185,6 +189,7 @@ where
             run_as: self.run_as,
             args: self.args,
             bin_name: self.bin_name,
+            overwrite_existing: self.overwrite_existing,
             init_systems: self.init_systems,
 
             path_set: PhantomData {},
@@ -205,6 +210,7 @@ where
             run_as: self.run_as,
             args: self.args,
             bin_name: self.bin_name,
+            overwrite_existing: self.overwrite_existing,
             init_systems: self.init_systems,
 
             path_set: PhantomData {},
@@ -225,6 +231,7 @@ where
             run_as: self.run_as,
             args: self.args,
             bin_name: self.bin_name,
+            overwrite_existing: self.overwrite_existing,
             init_systems: self.init_systems,
 
             path_set: PhantomData {},
@@ -245,6 +252,7 @@ where
             run_as: self.run_as,
             args: self.args,
             bin_name: self.bin_name,
+            overwrite_existing: self.overwrite_existing,
             init_systems: self.init_systems,
 
             path_set: PhantomData {},
@@ -254,8 +262,15 @@ where
         }
     }
 
+    /// The description for the installed service
     pub fn description(mut self, description: impl Display) -> Self {
         self.description = Some(description.to_string());
+        self
+    }
+
+    /// Should the installer overwrite existing files? Default is false
+    pub fn overwrite_existing(mut self, overwrite: bool) -> Self {
+        self.overwrite_existing = overwrite;
         self
     }
 
