@@ -111,7 +111,7 @@ fn current_crontab(user: Option<&str>) -> Result<Vec<Line>, GetCrontabError> {
 pub enum SetCrontabError {
     #[error("Could not run the crontab program: {0}")]
     CouldNotRun(std::io::Error),
-    #[error("Command `crontab -` failed, stderr:\n\t")]
+    #[error("Command `crontab -` failed, stderr:\n\t{stderr}")]
     CommandFailed { stderr: String },
     #[error("Failed to open crontab stdin")]
     StdinClosed,

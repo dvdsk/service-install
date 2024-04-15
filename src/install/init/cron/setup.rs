@@ -15,7 +15,7 @@ use super::{current_crontab, set_crontab};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Command `crontab -l` failed, stderr:\n\t")]
+    #[error("Command `crontab -l` failed, stderr:\n\t{stderr}")]
     ListFailed { stderr: String },
     #[error("Could not get the current crontab: {0}")]
     GetCrontab(super::GetCrontabError),

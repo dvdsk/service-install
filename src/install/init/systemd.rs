@@ -22,7 +22,7 @@ mod teardown;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SystemCtlError {
-    #[error("Could not run systemctl")]
+    #[error("Could not run systemctl, error: {0}")]
     Io(#[from] std::io::Error),
     #[error("Systemctl failed: {reason}")]
     Failed { reason: String },
@@ -38,13 +38,13 @@ pub enum SystemCtlError {
 pub enum Error {
     #[error("Could not configure systemd: {0}")]
     SystemCtl(#[from] SystemCtlError),
-    #[error("Could not write out unit file to {path}. Error: {e}")]
+    #[error("Could not write out unit file to {path}, error: {e}")]
     Writing { e: io::Error, path: PathBuf },
-    #[error("Could not remove the unit files")]
+    #[error("Could not remove the unit files, error: {0}")]
     Removing(io::Error),
-    #[error("Could not verify unit files where created by us")]
+    #[error("Could not verify unit files where created by us, error: {0}")]
     Verifying(io::Error),
-    #[error("Could not check if this system uses systemd (init system path could not be resolved")]
+    #[error("Could not check if this system uses systemd (init system path could not be resolved, error: {0}")]
     CheckingInitSys(io::Error),
 }
 

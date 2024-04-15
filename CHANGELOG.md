@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+# Version 0.4.1 (2024-04-15)
+
+### Fixed
+- All errors now print the underlying issue when it is known
+
 # Version 0.4.0 (2024-04-11)
 
 ### Added

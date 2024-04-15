@@ -105,15 +105,13 @@ pub enum InstallError {
     CrontabChanged(#[from] init::cron::teardown::CrontabChanged),
     #[error("Could not set crontab, needed to add our lines, error: {0}")]
     SetCrontab(#[from] init::cron::SetCrontabError),
-    // #[error("Could not remove old file(s)")]
-    // DeleteError(#[from] files::DeleteError),
     #[error("Something went wrong interacting with systemd: {0}")]
     Systemd(#[from] init::systemd::Error),
-    #[error("Could not copy executable")]
+    #[error("Could not copy executable: {0}")]
     CopyExe(std::io::Error),
-    #[error("Could not set the owner of the installed executable to be root")]
+    #[error("Could not set the owner of the installed executable to be root: {0}")]
     SetRootOwner(std::io::Error),
-    #[error("Could not make the installed executable read only")]
+    #[error("Could not make the installed executable read only: {0}")]
     SetReadOnly(#[from] files::SetReadOnlyError),
 }
 
@@ -163,7 +161,7 @@ pub enum RemoveError {
     CrontabChanged(#[from] init::cron::teardown::CrontabChanged),
     #[error("Could not set crontab, needed tot filter out our added lines, error: {0}")]
     SetCrontab(#[from] init::cron::SetCrontabError),
-    #[error("Could not remove file(s)")]
+    #[error("Could not remove file(s), error: {0}")]
     DeleteError(#[from] files::DeleteError),
     #[error("Something went wrong interacting with systemd: {0}")]
     Systemd(#[from] init::systemd::Error),

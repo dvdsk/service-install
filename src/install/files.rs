@@ -209,9 +209,9 @@ pub enum DeleteError {
     SystemDirNotAvailable,
     #[error("the path did not point to a binary")]
     SourceNotFile,
-    #[error("could not move binary to install location: {0}")]
+    #[error("could not move binary to install location, error: {0}")]
     IO(std::io::Error),
-    #[error("Could not get the current executable's location")]
+    #[error("Could not get the current executable's location, error: {0}")]
     GetExeLocation(std::io::Error),
     #[error("May only uninstall the currently running binary, running: {running} installed: {installed}")]
     ExeNotInstalled {

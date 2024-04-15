@@ -13,7 +13,7 @@ pub enum Error {
     Canceld,
     #[error("could not get input from the user: {0}")]
     UserInputFailed(#[from] dialoguer::Error),
-    #[error("ran into one or more errors, user chose to abort")]
+    #[error("ran into one or more errors and user chose to abort, errors: {0:#?}")]
     AbortedAfterError(Vec<InstallError>),
     #[error("user chose to cancel and rollback however rollback failed: {0}")]
     RollbackFollowingCancel(RollbackError),
