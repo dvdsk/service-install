@@ -241,6 +241,8 @@ where
         }
     }
 
+    /// Start the job on boot. When cron is used as init the system needs 
+    /// to be rebooted before this applies
     pub fn on_boot(self) -> Spec<Path, Name, Set, InstallType> {
         Spec {
             mode: self.mode,
@@ -274,9 +276,17 @@ where
         self
     }
 
-    /// These args will be shell escaped
-    pub fn args(mut self, args: Vec<String>) -> Self {
-        self.args = args;
+    /// These args will be shell escaped. If any arguments where already set
+    /// this adds to them
+    pub fn args(mut self, args: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.args.extend(args.into_iter().map(Into::into));
+        self
+    }
+
+    /// The argument will be shell escaped. This does not clear previous set
+    /// arguments but adds to it
+    pub fn arg(mut self, arg: impl Into<String>) -> Self {
+        self.args.push(arg.into());
         self
     }
 

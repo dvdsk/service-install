@@ -74,9 +74,9 @@ pub(crate) fn set_up_steps(params: &Params) -> Result<Steps, SetupError> {
         .working_dir
         .as_ref()
         .map(PathBuf::shell_escaped)
-        .map(|dir| format!("cd {dir} &&"))
+        .map(|dir| format!("cd {dir} && "))
         .unwrap_or_default();
-    let command = format!("{set_working_dir} {exe_path} {exe_args}");
+    let command = format!("{set_working_dir}{exe_path} {exe_args}");
     let rule = format!("{when} {command}");
 
     steps.push(Box::new(Add {
@@ -146,16 +146,17 @@ impl InstallStep for Add {
             .chain(iter::once(comment.as_str()))
             .chain(iter::once(rule.as_str()))
             .interleave_shortest(iter::once("\n").cycle())
+            .chain(iter::once("\n")) // some say cron likes a newline at the end
             .collect();
         set_crontab(&new_crontab, user.as_deref())?;
 
         Ok(Some(Box::new(RollbackImpossible)))
     }
 }
-struct RemovePrevious {
-    comments: Vec<Line>,
-    rule: Line,
-    user: Option<String>,
+pub(crate) struct RemovePrevious {
+    pub(crate) comments: Vec<Line>,
+    pub(crate) rule: Line,
+    pub(crate) user: Option<String>,
 }
 impl InstallStep for RemovePrevious {
     fn describe(&self, tense: Tense) -> String {
@@ -207,7 +208,7 @@ impl InstallStep for RemovePrevious {
 
         let new_crontab: String = new_lines
             .into_iter()
-            .interleave_shortest(iter::once("\n").cycle())
+            .interleave_shortest(iter::repeat("\n"))
             .collect();
         set_crontab(&new_crontab, user.as_deref())?;
 

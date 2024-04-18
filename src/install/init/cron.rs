@@ -1,11 +1,14 @@
+use crate::install::init::cron::teardown::path_from_rule;
 use std::fmt;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use super::{Params, SetupError, Steps};
 use crate::install::{RollbackError, RollbackStep};
 use crate::Tense;
 
+pub mod disable;
 pub mod setup;
 pub mod teardown;
 
@@ -23,6 +26,10 @@ pub(super) fn not_available() -> bool {
     !cron_running
 }
 
+pub(crate) fn is_init_path(path: &Path) -> bool {
+    path.ends_with("cron")
+}
+
 struct RollbackImpossible;
 impl RollbackStep for RollbackImpossible {
     fn perform(&mut self) -> Result<(), RollbackError> {
@@ -35,7 +42,7 @@ impl RollbackStep for RollbackImpossible {
 }
 
 #[derive(Debug, Clone)]
-struct Line {
+pub(crate) struct Line {
     /// line number in the crontab
     pos: usize,
     text: String,
@@ -44,6 +51,18 @@ struct Line {
 impl Line {
     fn text(&self) -> &str {
         &self.text
+    }
+
+    fn comment(&self) -> bool {
+        self.text.trim_start().starts_with('#')
+    }
+
+    fn exec(&self) -> Option<PathBuf> {
+        if self.comment() {
+            Some(path_from_rule(&self.text))
+        } else {
+            None
+        }
     }
 }
 

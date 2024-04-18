@@ -1,16 +1,17 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub mod cron;
-pub mod systemd;
 pub(crate) mod extract_path;
+pub mod systemd;
 
+use sysinfo::Pid;
 pub use systemd::FindExeError;
 
 use crate::install::RemoveStep;
 
 use super::builder::Trigger;
-use super::files::NoHomeError;
-use super::{Mode, InstallStep};
+use super::files::{DisableError, NoHomeError, TargetInUseError};
+use super::{InstallStep, Mode};
 
 type Steps = Vec<Box<dyn InstallStep>>;
 type RSteps = Vec<Box<dyn RemoveStep>>;
@@ -36,6 +37,20 @@ impl System {
             System::Cron => Ok(cron::not_available()),
         }
     }
+    pub(crate) fn disable_steps(
+        &self,
+        target: &Path,
+        pid: Pid,
+        mode: Mode,
+        run_as: Option<&str>,
+    ) -> Result<Vec<Box<dyn InstallStep>>, TargetInUseError> {
+        match self {
+            System::Systemd => Ok(systemd::disable_step(target, mode).map_err(DisableError::from)?),
+            System::Cron => {
+                Ok(cron::disable::step(target, pid, run_as).map_err(DisableError::from)?)
+            }
+        }
+    }
     pub(crate) fn set_up_steps(&self, params: &Params) -> Result<Steps, SetupError> {
         match self {
             System::Systemd => systemd::set_up_steps(params),
@@ -58,7 +73,18 @@ impl System {
     pub(crate) fn all() -> Vec<System> {
         vec![Self::Systemd, Self::Cron]
     }
+
+    pub(crate) fn is_init_path(&self, path: &Path) -> Result<bool, PathCheckError> {
+        match self {
+            System::Systemd => systemd::path_is_systemd(path),
+            System::Cron => Ok(cron::is_init_path(path)),
+        }
+    }
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error("The path could not be resolved, error {0}")]
+pub struct PathCheckError(std::io::Error);
 
 #[derive(thiserror::Error, Debug)]
 pub enum SetupError {

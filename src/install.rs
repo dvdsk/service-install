@@ -14,6 +14,9 @@ use itertools::{Either, Itertools};
 use crate::Tense;
 
 use self::builder::ToAssign;
+use self::init::cron::teardown::CrontabChanged;
+use self::init::cron::{GetCrontabError, SetCrontabError};
+use self::init::systemd::SystemCtlError;
 use self::init::SetupError;
 
 /// Whether to install system wide or for the current user only
@@ -204,10 +207,20 @@ impl Display for &dyn RemoveStep {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RollbackError {
-    #[error("Could not rollback error while removing: {0}")]
+    #[error("Could not rollback, error: {0}")]
     Removing(#[from] RemoveError),
+    #[error("Could not rollback, error restoring file permissions: {0}")]
+    RestoringPermissions(std::io::Error),
+    #[error("Could not rollback, error re-enabling service: {0}")]
+    ReEnabling(#[from] SystemCtlError),
     #[error("Can not rollback setting up cron, must be done manually")]
     Impossible,
+    #[error("Crontab changed undoing changes might overwrite the change")]
+    CrontabChanged(#[from] CrontabChanged),
+    #[error("Could not get the crontab, needed to undo a change to it: {0}")]
+    GetCrontab(#[from] GetCrontabError),
+    #[error("Could not revert to the original crontab: {0}")]
+    SetCrontab(#[from] SetCrontabError),
 }
 
 /// Undoes a [`InstallStep`]. Can be executed or described.
@@ -350,7 +363,14 @@ impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
             }
         }
 
-        let (mut steps, exe_path) = files::move_files(source, mode, overwrite_existing)?;
+        let init_systems = self.init_systems.unwrap_or_else(init::System::all);
+        let (mut steps, exe_path) = files::move_files(
+            source,
+            mode,
+            run_as.as_deref(),
+            overwrite_existing,
+            &init_systems,
+        )?;
         let params = init::Params {
             name,
             bin_name,
@@ -366,7 +386,7 @@ impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
         };
 
         let mut errors = Vec::new();
-        for init in self.init_systems.unwrap_or_else(init::System::all) {
+        for init in init_systems {
             if init.not_available().map_err(PrepareInstallError::Init)? {
                 continue;
             }

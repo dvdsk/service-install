@@ -114,7 +114,7 @@ impl InstallStep for EnableTimer {
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
         let name = self.name.clone() + ".timer";
-        super::enable(&name, self.mode)
+        super::enable(name.as_ref(), self.mode)
             .map_err(Error::SystemCtl)?;
         Ok(Some(Box::new(DisableTimer {
             name: self.name.clone(),
@@ -141,7 +141,7 @@ impl InstallStep for EnableService {
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
         let name = self.name.clone() + ".service";
-        super::enable(&name, self.mode)
+        super::enable(name.as_ref(), self.mode)
             .map_err(Error::SystemCtl)?;
         Ok(Some(Box::new(teardown::DisableService {
             name: self.name.clone(),

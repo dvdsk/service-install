@@ -49,7 +49,7 @@ impl RemoveStep for DisableService {
 
     fn perform(&mut self) -> Result<(), RemoveError> {
         let name = self.name.clone() + ".service";
-        disable(&name, self.mode).map_err(Error::SystemCtl)?;
+        disable(name.as_ref(), self.mode).map_err(Error::SystemCtl)?;
         Ok(())
     }
 }
@@ -94,7 +94,7 @@ impl RemoveStep for DisableTimer {
 
     fn perform(&mut self) -> Result<(), RemoveError> {
         let name = self.name.clone() + ".timer";
-        disable(&name, self.mode).map_err(Error::SystemCtl)?;
+        disable(name.as_ref(), self.mode).map_err(Error::SystemCtl)?;
         Ok(())
     }
 }

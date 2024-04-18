@@ -1,10 +1,19 @@
 use std::ffi::OsString;
-use std::fs;
+use std::fmt::Display;
+use std::fs::{self, Permissions};
+use std::io::ErrorKind;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
+use itertools::Itertools;
+
+use crate::install::files::id_process_parent::IdRes;
 use crate::install::RemoveStep;
 
-use super::{InstallError, InstallStep, Mode, RemoveError, RollbackStep, Tense};
+use super::init::PathCheckError;
+use super::{init, InstallError, InstallStep, Mode, RemoveError, RollbackStep, Tense};
+
+mod id_process_parent;
 
 #[derive(thiserror::Error, Debug)]
 pub enum MoveError {
@@ -17,9 +26,13 @@ pub enum MoveError {
     #[error("the path did not point to a binary")]
     SourceNotFile,
     #[error("could not move binary to install location: {0}")]
-    IO(#[from] std::io::Error),
-    #[error("there is already a file named {name} at {}", dir.display())]
+    IO(std::io::Error),
+    #[error("overwrite is not set and there is already a file named {name} at {}", dir.display())]
     TargetExists { name: String, dir: PathBuf },
+    #[error("{0}")]
+    TargetInUse(#[from] TargetInUseError),
+    #[error("could not check if already existing file is read only")]
+    CheckExistingFilePermissions(std::io::Error),
 }
 
 fn system_dir() -> Option<PathBuf> {
@@ -131,11 +144,11 @@ pub enum SetReadOnlyError {
     SetPermissions(std::io::Error),
 }
 
-struct SetReadOnly {
+struct MakeReadOnly {
     path: PathBuf,
 }
 
-impl InstallStep for SetReadOnly {
+impl InstallStep for MakeReadOnly {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Made",
@@ -147,12 +160,37 @@ impl InstallStep for SetReadOnly {
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
-        let mut permissions = fs::metadata(&self.path)
+        let org_permissions = fs::metadata(&self.path)
             .map_err(SetReadOnlyError::GetPermissions)?
             .permissions();
+        let mut permissions = org_permissions.clone();
         permissions.set_readonly(true);
         fs::set_permissions(&self.path, permissions).map_err(SetReadOnlyError::SetPermissions)?;
-        Ok(None)
+        Ok(Some(Box::new(RestorePermissions {
+            path: self.path.clone(),
+            org_permissions,
+        })))
+    }
+}
+
+struct RestorePermissions {
+    path: PathBuf,
+    org_permissions: Permissions,
+}
+
+impl RollbackStep for RestorePermissions {
+    fn perform(&mut self) -> Result<(), super::RollbackError> {
+        fs::set_permissions(&self.path, self.org_permissions.clone())
+            .map_err(super::RollbackError::RestoringPermissions)
+    }
+
+    fn describe(&self, tense: Tense) -> String {
+        let verb = match tense {
+            Tense::Past => "Restored",
+            Tense::Active | Tense::Present => "Restoring",
+            Tense::Future => "Will Restore",
+        };
+        format!("{verb} executables previous permissions")
     }
 }
 
@@ -160,36 +198,46 @@ type Steps = Vec<Box<dyn InstallStep>>;
 pub(crate) fn move_files(
     source: PathBuf,
     mode: Mode,
+    run_as: Option<&str>,
     overwrite_existing: bool,
+    init_systems: &[init::System],
 ) -> Result<(Steps, PathBuf), MoveError> {
     let dir = match mode {
         Mode::User => user_dir()?.ok_or(MoveError::UserDirNotAvailable)?,
         Mode::System => system_dir().ok_or(MoveError::SystemDirNotAvailable)?,
     };
 
-    let name = source
+    let file_name = source
         .file_name()
         .ok_or(MoveError::SourceNotFile)?
         .to_owned();
-    let target = dir.join(&name);
+    let target = dir.join(&file_name);
 
     if target.is_file() && !overwrite_existing {
         return Err(MoveError::TargetExists {
-            name: name.to_string_lossy().to_string(),
+            name: file_name.to_string_lossy().to_string(),
             dir,
         });
     }
 
-    let mut steps = vec![
+    let mut steps = Vec::new();
+    if let Some(make_removable) = make_removable_if_needed(&target)? {
+        steps.push(make_removable);
+    }
+
+    let disable_steps = disable_if_running(&target, init_systems, mode, run_as)?;
+    steps.extend(disable_steps);
+
+    steps.extend([
         Box::new(Move {
-            name,
+            name: file_name,
             source,
             target: target.clone(),
         }) as Box<dyn InstallStep>,
-        Box::new(SetReadOnly {
+        Box::new(MakeReadOnly {
             path: target.clone(),
         }),
-    ];
+    ]);
     if let Mode::System = mode {
         steps.push(Box::new(SetRootOwner {
             path: target.clone(),
@@ -197,6 +245,116 @@ pub(crate) fn move_files(
     }
 
     Ok((steps, target))
+}
+
+struct MakeRemovable(PathBuf);
+
+fn make_removable_if_needed(target: &Path) -> Result<Option<Box<dyn InstallStep>>, MoveError> {
+    let permissions = match fs::metadata(target) {
+        Ok(meta) => meta,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(MoveError::CheckExistingFilePermissions(e)),
+    }
+    .permissions();
+
+    Ok(if permissions.readonly() {
+        let step = MakeRemovable(target.to_owned());
+        let step = Box::new(step) as Box<dyn InstallStep>;
+        Some(step)
+    } else {
+        None
+    })
+}
+
+impl InstallStep for MakeRemovable {
+    fn describe(&self, tense: Tense) -> String {
+        let verb = match tense {
+            Tense::Past => "Made",
+            Tense::Active => "Making",
+            Tense::Present => "Make",
+            Tense::Future => "Will make",
+        };
+        format!("{verb} the file taking up the install location removable")
+    }
+
+    fn describe_detailed(&self, tense: Tense) -> String {
+        let verb = match tense {
+            Tense::Past => "Made",
+            Tense::Active => "Making",
+            Tense::Present => "Make",
+            Tense::Future => "Will make",
+        };
+        format!("An existing file is taking up the install location. {verb} it removable by making it writable\n| file:\n|\t{}", self.0.display())
+    }
+
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
+        let org_permissions = fs::metadata(&self.0)
+            .map_err(SetReadOnlyError::GetPermissions)?
+            .permissions();
+        let mut permissions = org_permissions.clone();
+        permissions.set_mode(0o600);
+        fs::set_permissions(&self.0, permissions).map_err(SetReadOnlyError::SetPermissions)?;
+        Ok(Some(Box::new(RestorePermissions {
+            path: self.0.clone(),
+            org_permissions,
+        })))
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum TargetInUseError {
+    NoParent,
+    ResolvePath(#[from] PathCheckError),
+    Parents(Vec<PathBuf>),
+    CouldNotDisable(#[from] DisableError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DisableError {
+    #[error("{0}")]
+    SystemD(#[from] init::systemd::DisableError),
+    #[error("{0}")]
+    Cron(#[from] init::cron::disable::Error),
+}
+
+impl Display for TargetInUseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TargetInUseError::NoParent => {
+                writeln!(f, "There is already a file at the install location. It can not be replaced as it is running. We have no information on how it was started as it has no parent")
+            }
+            TargetInUseError::ResolvePath(_) => {
+                writeln!(f, "There is already a file at the install location. It can not be replaced as it is running. While it has a parent we failed to get information about it")
+            }
+            TargetInUseError::Parents(tree) => {
+                let tree = tree.iter().map(|p| p.display().to_string());
+                let tree: String = Itertools::intersperse(tree, " -> ".to_string()).collect();
+                writeln!(f, "There is already a file at the install location. It can not be replaced as it is running.\n\tThe process tree that started that:\n\t`{tree}`\nIn this tree the arrow means left started the right process")
+            }
+            TargetInUseError::CouldNotDisable(err) => {
+                writeln!(
+                    f,
+                    "Could not disable the service keeping the file in use. {err}"
+                )
+            }
+        }
+    }
+}
+
+fn disable_if_running(
+    target: &Path,
+    init_systems: &[init::System],
+    mode: Mode,
+    run_as: Option<&str>,
+) -> Result<Vec<Box<dyn InstallStep>>, TargetInUseError> {
+    let (init, pid) = match id_process_parent::check(target, init_systems)? {
+        IdRes::ParentIsInit { init, pid } => (init, pid),
+        IdRes::NotRunning => return Ok(Vec::new()), // aka None
+        IdRes::NoParent => return Err(TargetInUseError::NoParent)?,
+        IdRes::ParentNotInit { parents } => return Err(TargetInUseError::Parents(parents)),
+    };
+
+    init.disable_steps(target, pid, mode, run_as)
 }
 
 #[derive(thiserror::Error, Debug)]

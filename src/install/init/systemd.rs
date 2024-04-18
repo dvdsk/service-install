@@ -3,6 +3,7 @@
 // only allow access from the lib. However since the lib is not
 // public it makes no sense to document errors.
 
+use std::ffi::OsStr;
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
@@ -15,10 +16,14 @@ use crate::install::builder::Trigger;
 use crate::install::files::NoHomeError;
 use crate::install::init::extract_path;
 
-use super::{ExeLocation, Mode, Params, RSteps, SetupError, Steps, TearDownError};
+use super::{ExeLocation, Mode, Params, PathCheckError, RSteps, SetupError, Steps, TearDownError};
 
+mod disable_existing;
 mod setup;
 mod teardown;
+
+pub(crate) use disable_existing::disable_step;
+pub use disable_existing::DisableError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SystemCtlError {
@@ -44,8 +49,21 @@ pub enum Error {
     Removing(io::Error),
     #[error("Could not verify unit files where created by us, error: {0}")]
     Verifying(io::Error),
-    #[error("Could not check if this system uses systemd (init system path could not be resolved, error: {0}")]
-    CheckingInitSys(io::Error),
+    #[error("Could not check if this system uses systemd, err: {0}")]
+    CheckingInitSys(#[from] PathCheckError),
+}
+
+pub(crate) fn path_is_systemd(path: &Path) -> Result<bool, PathCheckError> {
+    let path = path.canonicalize().map_err(PathCheckError)?;
+
+    Ok(!path
+        .components()
+        .filter_map(|c| match c {
+            Component::Normal(cmp) => Some(cmp),
+            _other => None,
+        })
+        .filter_map(|c| c.to_str())
+        .any(|c| c == "systemd"))
 }
 
 // check if systemd is the init system (pid 1)
@@ -60,18 +78,7 @@ pub(super) fn not_available() -> Result<bool, SetupError> {
         .process(Pid::from(1))
         .expect("there should always be an init system")
         .cmd()[0];
-    let init_path = Path::new(init_sys.as_str())
-        .canonicalize()
-        .map_err(Error::CheckingInitSys)?;
-
-    Ok(!init_path
-        .components()
-        .filter_map(|c| match c {
-            Component::Normal(cmp) => Some(cmp),
-            _other => None,
-        })
-        .filter_map(|c| c.to_str())
-        .any(|c| c == "systemd"))
+    Ok(path_is_systemd(Path::new(init_sys)).map_err(Error::from)?)
 }
 
 pub(super) fn set_up_steps(params: &Params) -> Result<Steps, SetupError> {
@@ -157,12 +164,14 @@ fn exe_path(service_unit: PathBuf) -> Result<PathBuf, FindExeError> {
     }
 }
 
+/// There are other paths, but for now we return the most commonly used one
 fn user_path() -> Result<PathBuf, NoHomeError> {
     Ok(home::home_dir()
         .ok_or(NoHomeError)?
         .join(".config/systemd/user/"))
 }
 
+/// There are other paths, but for now we return the most commonly used one
 fn system_path() -> PathBuf {
     PathBuf::from("/etc/systemd/system")
 }
@@ -177,7 +186,7 @@ fn our_service(service_path: &Path) -> Result<bool, Error> {
     Ok(service.contains(COMMENT_PREAMBLE) && service.contains(COMMENT_SUFFIX))
 }
 
-fn systemctl(args: &[&'static str], service: &str) -> Result<(), SystemCtlError> {
+fn systemctl(args: &[&'static str], service: &OsStr) -> Result<(), SystemCtlError> {
     let output = Command::new("systemctl").args(args).arg(service).output()?;
 
     if output.status.success() {
@@ -188,7 +197,7 @@ fn systemctl(args: &[&'static str], service: &str) -> Result<(), SystemCtlError>
     Err(SystemCtlError::Failed { reason })
 }
 
-fn is_active(service: &str, mode: Mode) -> Result<bool, SystemCtlError> {
+fn is_active(service: &OsStr, mode: Mode) -> Result<bool, SystemCtlError> {
     let args = match mode {
         Mode::System => &["is-active"][..],
         Mode::User => &["is-active", "--user"][..],
@@ -199,7 +208,7 @@ fn is_active(service: &str, mode: Mode) -> Result<bool, SystemCtlError> {
 }
 
 fn wait_for(
-    service: &str,
+    service: &OsStr,
     state: bool,
     mode: Mode,
     timeout_error: SystemCtlError,
@@ -214,7 +223,7 @@ fn wait_for(
     Err(timeout_error)
 }
 
-fn enable(unit: &str, mode: Mode) -> Result<(), SystemCtlError> {
+fn enable(unit: &OsStr, mode: Mode) -> Result<(), SystemCtlError> {
     let args = match mode {
         Mode::System => &["enable", "--now"][..],
         Mode::User => &["enable", "--user", "--now"][..],
@@ -223,7 +232,7 @@ fn enable(unit: &str, mode: Mode) -> Result<(), SystemCtlError> {
     wait_for(unit, true, mode, SystemCtlError::EnableTimeOut)
 }
 
-fn disable(unit: &str, mode: Mode) -> Result<(), SystemCtlError> {
+fn disable(unit: &OsStr, mode: Mode) -> Result<(), SystemCtlError> {
     let args = match mode {
         Mode::System => &["disable", "--now"][..],
         Mode::User => &["disable", "--user", "--now"][..],
