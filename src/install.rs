@@ -116,6 +116,8 @@ pub enum InstallError {
     SetRootOwner(std::io::Error),
     #[error("Could not make the installed executable read only: {0}")]
     SetReadOnly(#[from] files::SetReadOnlyError),
+    #[error("Can not disable Cron service, process will not stop.")]
+    CouldNotStop,
 }
 
 /// One step in the install process. Can be executed or described.
