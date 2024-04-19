@@ -21,7 +21,7 @@ fn install(schedule: Option<Schedule>) {
         .unwrap()
         .name("cli")
         .arg("--simulate-service")
-        .allowed_inits(&[init::System::Cron])
+        .allowed_inits(&[init::System::Systemd])
         .overwrite_existing(true);
 
     let spec = if let Some(schedule) = schedule {

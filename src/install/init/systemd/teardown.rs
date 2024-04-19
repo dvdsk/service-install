@@ -22,7 +22,7 @@ impl RemoveStep for RemoveService {
             Tense::Active => "Remove",
         };
         let path = self.path.display();
-        format!("{verb} systemd service unit at:\n\t{path}")
+        format!("{verb} systemd service unit at:\n|\t{path}")
     }
 
     fn perform(&mut self) -> Result<(), RemoveError> {
@@ -67,7 +67,7 @@ impl RemoveStep for RemoveTimer {
             Tense::Active => "Remove",
         };
         let path = self.path.display();
-        format!("{verb} systemd timer at:\n\t{path}")
+        format!("{verb} systemd timer at:\n|\t{path}")
     }
 
     fn perform(&mut self) -> Result<(), RemoveError> {

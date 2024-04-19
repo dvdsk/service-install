@@ -103,7 +103,7 @@ impl InstallStep for Move {
             .parent()
             .expect("path points to file, so has parent")
             .display();
-        format!("{verb} executable `{name}` to:\n\t{target}")
+        format!("{verb} executable `{name}` to:\n|\t{target}")
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {

@@ -39,8 +39,8 @@ impl InstallStep for Service {
             Tense::Active => "Write",
         };
         let path = self.path.display();
-        let content = self.unit.replace('\n', "\n\t");
-        format!("{verb} systemd service unit to:\n\t{path}\ncontent:\n\t{content}")
+        let content = self.unit.replace('\n', "\n|\t");
+        format!("{verb} systemd service unit to:\n|\t{path}\n| content:\n|\t{content}")
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
@@ -80,8 +80,8 @@ impl InstallStep for Timer {
             Tense::Active => "Write",
         };
         let path = self.path.display();
-        let content = self.unit.replace('\n', "\n\t");
-        format!("{verb} systemd timer unit to:\n\t{path}\ncontent:\n\t{content}")
+        let content = self.unit.replace('\n', "\n|\t");
+        format!("{verb} systemd timer unit to:\n|\t{path}\n| content:\n|\t{content}")
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
