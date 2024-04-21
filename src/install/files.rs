@@ -270,9 +270,9 @@ impl InstallStep for MakeRemovable {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Made",
-            Tense::Active => "Making",
-            Tense::Present => "Make",
+            Tense::Present => "Making",
             Tense::Future => "Will make",
+            Tense::Active => "Make",
         };
         format!("{verb} the file taking up the install location removable")
     }
@@ -280,9 +280,9 @@ impl InstallStep for MakeRemovable {
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Made",
-            Tense::Active => "Making",
-            Tense::Present => "Make",
+            Tense::Present => "Making",
             Tense::Future => "Will make",
+            Tense::Active => "Make",
         };
         format!("A read only file is taking up the install location. {verb} it removable by making it writable\n| file:\n|\t{}", self.0.display())
     }

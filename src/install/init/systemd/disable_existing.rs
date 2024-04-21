@@ -46,9 +46,9 @@ struct Disable {
 impl InstallStep for Disable {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            Tense::Past => "disabled",
-            Tense::Active => "disabling",
-            Tense::Present => "disable",
+            Tense::Past => "Disabled",
+            Tense::Active => "Disabling",
+            Tense::Present => "Disable",
             Tense::Future => "Will disable",
         };
         format!(
@@ -59,9 +59,9 @@ impl InstallStep for Disable {
 
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
-            Tense::Past => "disabled",
-            Tense::Active => "disabling",
-            Tense::Present => "disable",
+            Tense::Past => "Disabled",
+            Tense::Active => "Disabling",
+            Tense::Present => "Disable",
             Tense::Future => "Will disable",
         };
         #[allow(clippy::format_collect)]
