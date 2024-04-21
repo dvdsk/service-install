@@ -1,4 +1,4 @@
-use std::ffi::OsString;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
@@ -7,22 +7,18 @@ use itertools::Itertools;
 use crate::install::{InstallError, InstallStep, RollbackError, RollbackStep};
 use crate::Tense;
 
-use super::{exe_path, system_path, user_path, FindExeError, Mode};
+use super::unit::{self, Unit};
+use super::{system_path, user_path, FindExeError, Mode};
 
 struct ReEnable {
-    units: Vec<OsString>,
+    units: Vec<Unit>,
     mode: Mode,
 }
 
 impl RollbackStep for ReEnable {
     fn perform(&mut self) -> Result<(), RollbackError> {
-        let mut rollback = ReEnable {
-            mode: self.mode,
-            units: Vec::new(),
-        };
         for unit in &self.units {
-            super::enable(unit, self.mode)?;
-            rollback.units.push(unit.clone());
+            super::enable(&unit.file_name, self.mode, true)?;
         }
         Ok(())
     }
@@ -42,7 +38,8 @@ impl RollbackStep for ReEnable {
 }
 
 struct Disable {
-    units: Vec<OsString>,
+    services: Vec<Unit>,
+    timers: Vec<Unit>,
     mode: Mode,
 }
 
@@ -55,7 +52,7 @@ impl InstallStep for Disable {
             Tense::Future => "Will disable",
         };
         format!(
-            "{verb} the {} services running the file at the target location",
+            "{verb} the {} services and/or timers running the file at the install location",
             self.mode
         )
     }
@@ -69,15 +66,35 @@ impl InstallStep for Disable {
         };
         #[allow(clippy::format_collect)]
         let services: String = self
-            .units
+            .services
             .iter()
-            .map(|unit| unit.to_string_lossy().to_string())
+            .map(|unit| unit.file_name.to_string_lossy().to_string())
+            .map(|unit| format!("\n|\t- {unit}"))
+            .collect();
+        #[allow(clippy::format_collect)]
+        let timers: String = self
+            .timers
+            .iter()
+            .map(|unit| unit.file_name.to_string_lossy().to_string())
             .map(|unit| format!("\n|\t- {unit}"))
             .collect();
 
+        match (services.is_empty(), timers.is_empty()) {
+            (false, false) => 
         format!(
-            "{verb} the {} services running the file at the target location\n|\tservices:{services}", self.mode
-        )
+            "{verb} the {} services and/or timers running the file at the install location\n| services:{services}\n| timers:{timers}",
+            self.mode
+        ) ,
+            (false, true) => 
+        format!(
+            "{verb} the {} services running the file at the install location\n| services:{services}", self.mode),
+            (true, false) => 
+        format!(
+            "{verb} the {} timers running the file at the install location\n| timers:{timers}",
+            self.mode
+        ),
+            (true, true) => unreachable!("Would have triggered error while constructing the disable installstep.")
+        }
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
@@ -85,8 +102,13 @@ impl InstallStep for Disable {
             mode: self.mode,
             units: Vec::new(),
         });
-        for unit in &self.units {
-            super::enable(unit, self.mode).map_err(super::Error::SystemCtl)?;
+        for unit in &self.services {
+            super::disable(&unit.file_name, self.mode, true).map_err(super::Error::SystemCtl)?;
+            rollback.units.push(unit.clone());
+        }
+        for unit in &self.timers {
+            super::disable(&unit.file_name, self.mode, true).map_err(super::Error::SystemCtl)?;
+            super::stop(&unit.name(), self.mode).map_err(super::Error::SystemCtl)?;
             rollback.units.push(unit.clone());
         }
         let rollback = rollback as Box<dyn RollbackStep>;
@@ -98,36 +120,65 @@ impl InstallStep for Disable {
 pub enum DisableError {
     #[error("Could not find the service: {0}")]
     CouldNotFindIt(#[from] FindError),
+    #[error("Could not open systemd unit: {0}")]
+    CouldNotReadUnit(#[from] unit::Error),
+    #[error("No service or timer found that could have started the service")]
+    NoServiceOrTimerFound,
 }
 
 pub(crate) fn disable_step(
     target: &Path,
     mode: Mode,
 ) -> Result<Vec<Box<dyn InstallStep>>, DisableError> {
-    let units = find_services_spawning(target, mode)?;
-    let step = Box::new(Disable { units, mode });
-    let step = step as Box<dyn InstallStep>;
-    Ok(vec![step])
-}
-
-fn find_services_spawning(target: &Path, mode: Mode) -> Result<Vec<OsString>, FindError> {
-    let mut units = Vec::new();
     let path = match mode {
         Mode::User => user_path().unwrap(),
         Mode::System => system_path(),
     };
+    let services: Vec<_> = collect_services(&path)
+        .map_err(FindError::CouldNotReadDir)?
+        .into_iter()
+        .map(Unit::from_path)
+        .collect::<Result<_, _>>()
+        .map_err(DisableError::CouldNotReadUnit)?;
+    let timers: Vec<_> = collect_timers(&path)
+        .map_err(FindError::CouldNotReadDir)?
+        .into_iter()
+        .map(Unit::from_path)
+        .collect::<Result<_, _>>()
+        .map_err(DisableError::CouldNotReadUnit)?;
 
-    collect_units_into(&mut units, &path)?;
+    let services = find_services_with_target_exe(services, target)?;
+    // extensions are the problem here
+    let names: HashSet<_> = services.iter().map(Unit::name).collect();
+    let mut timers: Vec<_> = timers
+        .into_iter()
+        .filter(|timer| names.contains(&timer.name()))
+        .collect();
+    timers.dedup_by_key(|u| u.name());
+    timers.sort_by_key(Unit::name);
 
+    let mut services: Vec<_> = services.into_iter().filter(Unit::has_install).collect();
+    services.dedup_by_key(|u| u.name());
+    services.sort_by_key(Unit::name);
+
+    if services.is_empty() && timers.is_empty() {
+        return Err(DisableError::NoServiceOrTimerFound);
+    }
+    let disable = Box::new(Disable {
+        services,
+        timers,
+        mode,
+    });
+    let disable = disable as Box<dyn InstallStep>;
+    Ok(vec![disable])
+}
+
+fn find_services_with_target_exe(units: Vec<Unit>, target: &Path) -> Result<Vec<Unit>, FindError> {
     let (units, errs): (Vec<_>, Vec<_>) = units
         .into_iter()
-        .map(exe_path)
-        .filter_ok(|path| path == target)
-        .map_ok(|path| {
-            path.file_name()
-                .expect("collected units end in .service")
-                .to_owned()
-        })
+        .map(|unit| unit.exe_path().map(|exe| (exe, unit)))
+        .filter_ok(|(exe, _)| exe == target)
+        .map_ok(|(_, unit)| unit)
         .partition_result();
 
     if units.is_empty() && !errs.is_empty() {
@@ -147,17 +198,36 @@ pub enum FindError {
     CouldNotReadDir(#[from] std::io::Error),
 }
 
-fn collect_units_into(units: &mut Vec<PathBuf>, dir: &Path) -> io::Result<()> {
+fn walk_dir(dir: &Path, process_file: &mut impl FnMut(&Path)) -> io::Result<()> {
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
-                collect_units_into(units, &path)?;
-            } else if path.is_file() && path.ends_with(".service") {
-                units.push(path);
+                walk_dir(&path, process_file)?;
+            } else if path.is_file() {
+                (process_file)(&path);
             }
         }
     }
     Ok(())
+}
+fn collect_services(dir: &Path) -> io::Result<Vec<PathBuf>> {
+    let mut units = Vec::new();
+    walk_dir(dir, &mut |path| {
+        if path.extension().is_some_and(|e| e == "service") {
+            units.push(path.to_owned());
+        }
+    })?;
+    Ok(units)
+}
+
+fn collect_timers(dir: &Path) -> io::Result<Vec<PathBuf>> {
+    let mut units = Vec::new();
+    walk_dir(dir, &mut |path| {
+        if path.extension().is_some_and(|e| e == "timer") {
+            units.push(path.to_owned());
+        }
+    })?;
+    Ok(units)
 }

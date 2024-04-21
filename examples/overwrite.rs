@@ -32,7 +32,7 @@ fn install(schedule: Option<Schedule>) {
     let steps = spec.prepare_install().unwrap();
 
     for mut step in steps {
-        println!("{}", step.describe_detailed(Tense::Present));
+        println!("{}", step.describe_detailed(Tense::Active));
         step.perform().unwrap();
     }
 }
@@ -47,14 +47,17 @@ fn main() {
         return;
     }
 
-    let soon = time::OffsetDateTime::now_local().unwrap().time() + Duration::from_secs(65);
+    // let soon = time::OffsetDateTime::now_local().unwrap().time() + Duration::from_secs(65);
+    let soon = time::OffsetDateTime::now_local().unwrap().time() + Duration::from_secs(5);
 
     install(Some(Schedule::Daily(soon)));
     println!("Install 1 complete");
     println!("Sleeping for 65 seconds to allow the service to start\n\n");
-    thread::sleep(Duration::from_secs(65));
+    // thread::sleep(Duration::from_secs(5));
+    thread::sleep(Duration::from_secs(20));
     install(None);
     println!("Install 2 complete\n\n");
 
+    thread::sleep(Duration::from_secs(30));
     cleanup()
 }

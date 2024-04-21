@@ -7,8 +7,8 @@ use itertools::Itertools;
 
 use crate::install::builder::Trigger;
 use crate::install::init::{EscapedPath, Params, Steps};
-use crate::install::Mode;
 use crate::install::InstallStep;
+use crate::install::Mode;
 use crate::schedule::Schedule;
 
 use super::teardown::DisableTimer;
@@ -39,16 +39,15 @@ impl InstallStep for Service {
             Tense::Active => "Write",
         };
         let path = self.path.display();
-        let content = self.unit.replace('\n', "\n|\t");
+        let content = self.unit.trim_end().replace('\n', "\n|\t");
         format!("{verb} systemd service unit to:\n|\t{path}\n| content:\n|\t{content}")
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
-        write_unit(&self.path, &self.unit)
-            .map_err(|e| Error::Writing {
-                e,
-                path: self.path.clone(),
-            })?;
+        write_unit(&self.path, &self.unit).map_err(|e| Error::Writing {
+            e,
+            path: self.path.clone(),
+        })?;
         Ok(Some(Box::new(teardown::RemoveService {
             path: self.path.clone(),
         })))
@@ -80,16 +79,15 @@ impl InstallStep for Timer {
             Tense::Active => "Write",
         };
         let path = self.path.display();
-        let content = self.unit.replace('\n', "\n|\t");
+        let content = self.unit.trim_end().replace('\n', "\n|\t");
         format!("{verb} systemd timer unit to:\n|\t{path}\n| content:\n|\t{content}")
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
-        write_unit(&self.path, &self.unit)
-            .map_err(|e| Error::Writing {
-                e,
-                path: self.path.clone(),
-            })?;
+        write_unit(&self.path, &self.unit).map_err(|e| Error::Writing {
+            e,
+            path: self.path.clone(),
+        })?;
         Ok(Some(Box::new(teardown::RemoveTimer {
             path: self.path.clone(),
         })))
@@ -114,8 +112,7 @@ impl InstallStep for EnableTimer {
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
         let name = self.name.clone() + ".timer";
-        super::enable(name.as_ref(), self.mode)
-            .map_err(Error::SystemCtl)?;
+        super::enable(name.as_ref(), self.mode, true).map_err(Error::SystemCtl)?;
         Ok(Some(Box::new(DisableTimer {
             name: self.name.clone(),
             mode: self.mode,
@@ -126,6 +123,7 @@ impl InstallStep for EnableTimer {
 struct EnableService {
     name: String,
     mode: Mode,
+    start: bool,
 }
 
 impl InstallStep for EnableService {
@@ -136,16 +134,25 @@ impl InstallStep for EnableService {
             Tense::Future => "Will Enable",
             Tense::Active => "Enable",
         };
-        format!("{verb} systemd {} service: {}", self.mode, self.name)
+        let start = if self.start {
+            match tense {
+                Tense::Past => "and started ",
+                Tense::Present | Tense::Future => "and start ",
+                Tense::Active => "and starting ",
+            }
+        } else {
+            ""
+        };
+        format!("{verb} {start}systemd {} service: {}", self.mode, self.name)
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
         let name = self.name.clone() + ".service";
-        super::enable(name.as_ref(), self.mode)
-            .map_err(Error::SystemCtl)?;
+        super::enable(name.as_ref(), self.mode, self.start).map_err(Error::SystemCtl)?;
         Ok(Some(Box::new(teardown::DisableService {
             name: self.name.clone(),
             mode: self.mode,
+            stop: self.start,
         })))
     }
 }
@@ -177,6 +184,7 @@ pub(crate) fn without_timer(path_without_extension: &Path, params: &Params) -> S
     let enable = Box::new(EnableService {
         name: params.name.clone(),
         mode: params.mode,
+        start: true,
     });
 
     vec![create_service, enable]
@@ -192,10 +200,6 @@ fn render_service(params: &Params) -> String {
     } = params;
 
     let description = params.description();
-    let ty = match trigger {
-        Trigger::OnSchedule(_) => "oneshot",
-        Trigger::OnBoot => "simple",
-    };
 
     let exe_path = exe_path.shell_escaped();
     let exe_args: String = Itertools::intersperse(
@@ -206,14 +210,24 @@ fn render_service(params: &Params) -> String {
 
     let working_dir_section = working_dir
         .as_ref()
-        .map(|d| format!("\n   WorkingDirectory={}", d.shell_escaped()))
+        .map(|d| format!("\nWorkingDirectory={}", d.shell_escaped()))
         .unwrap_or_default();
 
     let user = params
         .run_as
         .as_ref()
-        .map(|user| format!("\n   User={user}"))
+        .map(|user| format!("\nUser={user}"))
         .unwrap_or_default();
+
+    let target = match params.mode {
+        Mode::User => "default.target",
+        Mode::System => "multi-user.target",
+    };
+
+    let install_section = match trigger {
+        Trigger::OnSchedule(_) => String::new(), // started by timer
+        Trigger::OnBoot => format!("[Install]\nWantedBy={target}\n"),
+    };
 
     let comment = init::autogenerated_comment(params.bin_name);
     format!(
@@ -223,11 +237,9 @@ Description={description}
 After=network.target
 
 [Service]
-Type={ty}{working_dir_section}{user}
+Type=simple{working_dir_section}{user}
 ExecStart={exe_path} {exe_args}
-
-[Install]
-WantedBy=multi-user.target"
+{install_section}"
     )
 }
 

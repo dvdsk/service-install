@@ -284,7 +284,7 @@ impl InstallStep for MakeRemovable {
             Tense::Present => "Make",
             Tense::Future => "Will make",
         };
-        format!("An existing file is taking up the install location. {verb} it removable by making it writable\n| file:\n|\t{}", self.0.display())
+        format!("A read only file is taking up the install location. {verb} it removable by making it writable\n| file:\n|\t{}", self.0.display())
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {

@@ -34,6 +34,7 @@ impl RemoveStep for RemoveService {
 pub(crate) struct DisableService {
     pub(crate) name: String,
     pub(crate) mode: Mode,
+    pub(crate) stop: bool,
 }
 
 impl RemoveStep for DisableService {
@@ -44,12 +45,21 @@ impl RemoveStep for DisableService {
             Tense::Future => "Will disable",
             Tense::Active => "Disable",
         };
-        format!("{verb} systemd {} service: {}", self.mode, self.name)
+        let stop = if self.stop {
+            match tense {
+                Tense::Past => "and stopped ",
+                Tense::Present | Tense::Future => "and stop ",
+                Tense::Active => "and stopping ",
+            }
+        } else {
+            ""
+        };
+        format!("{verb} {stop}systemd {} service: {}", self.mode, self.name)
     }
 
     fn perform(&mut self) -> Result<(), RemoveError> {
         let name = self.name.clone() + ".service";
-        disable(name.as_ref(), self.mode).map_err(Error::SystemCtl)?;
+        disable(name.as_ref(), self.mode, self.stop).map_err(Error::SystemCtl)?;
         Ok(())
     }
 }
@@ -94,7 +104,7 @@ impl RemoveStep for DisableTimer {
 
     fn perform(&mut self) -> Result<(), RemoveError> {
         let name = self.name.clone() + ".timer";
-        disable(name.as_ref(), self.mode).map_err(Error::SystemCtl)?;
+        disable(name.as_ref(), self.mode, true).map_err(Error::SystemCtl)?;
         Ok(())
     }
 }
@@ -104,6 +114,7 @@ pub(crate) fn disable_then_remove_service(service_path: PathBuf, name: &str, mod
         Box::new(DisableService {
             name: name.to_owned(),
             mode,
+            stop: true,
         }),
         Box::new(RemoveService { path: service_path }),
     ]

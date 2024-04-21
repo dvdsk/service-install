@@ -4,23 +4,24 @@
 // public it makes no sense to document errors.
 
 use std::ffi::OsStr;
-use std::io::ErrorKind;
+use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
-use std::str::FromStr;
 use std::thread;
 use std::time::{Duration, Instant};
-use std::{fs, io};
 
 use crate::install::builder::Trigger;
 use crate::install::files::NoHomeError;
-use crate::install::init::extract_path;
+
+pub use self::unit::FindExeError;
+use self::unit::Unit;
 
 use super::{ExeLocation, Mode, Params, PathCheckError, RSteps, SetupError, Steps, TearDownError};
 
 mod disable_existing;
 mod setup;
 mod teardown;
+mod unit;
 
 pub(crate) use disable_existing::disable_step;
 pub use disable_existing::DisableError;
@@ -35,6 +36,8 @@ pub enum SystemCtlError {
     EnableTimeOut,
     #[error("Timed out trying to disable service")]
     DisableTimeOut,
+    #[error("Timed out trying to stop service")]
+    StopTimeOut,
     #[error("Something send a signal to systemctl ending it")]
     Terminated,
 }
@@ -47,8 +50,8 @@ pub enum Error {
     Writing { e: io::Error, path: PathBuf },
     #[error("Could not remove the unit files, error: {0}")]
     Removing(io::Error),
-    #[error("Could not verify unit files where created by us, error: {0}")]
-    Verifying(io::Error),
+    #[error("Could not verify unit files where created by us, could not open them, error: {0}")]
+    Verifying(#[from] unit::Error),
     #[error("Could not check if this system uses systemd, err: {0}")]
     CheckingInitSys(#[from] PathCheckError),
 }
@@ -56,7 +59,7 @@ pub enum Error {
 pub(crate) fn path_is_systemd(path: &Path) -> Result<bool, PathCheckError> {
     let path = path.canonicalize().map_err(PathCheckError)?;
 
-    Ok(!path
+    Ok(path
         .components()
         .filter_map(|c| match c {
             Component::Normal(cmp) => Some(cmp),
@@ -78,7 +81,7 @@ pub(super) fn not_available() -> Result<bool, SetupError> {
         .process(Pid::from(1))
         .expect("there should always be an init system")
         .cmd()[0];
-    Ok(path_is_systemd(Path::new(init_sys)).map_err(Error::from)?)
+    Ok(!path_is_systemd(Path::new(init_sys)).map_err(Error::from)?)
 }
 
 pub(super) fn set_up_steps(params: &Params) -> Result<Steps, SetupError> {
@@ -109,59 +112,32 @@ pub(super) fn tear_down_steps(
     let mut steps = Vec::new();
 
     let timer_path = without_extension.with_extension("timer");
-    let has_timer = our_service(&timer_path)?;
-    if has_timer {
+    let timer = Unit::from_path(timer_path).map_err(Error::Verifying)?;
+    if timer.our_service() {
         steps.extend(teardown::disable_then_remove_with_timer(
-            timer_path, name, mode,
+            timer.path.clone(),
+            name,
+            mode,
         ));
     }
 
     let service_path = without_extension.with_extension("service");
-    let exe_path = if our_service(&service_path)? {
+    let service = Unit::from_path(service_path).map_err(Error::Verifying)?;
+
+    let exe_path = if service.our_service() {
         steps.extend(teardown::disable_then_remove_service(
-            service_path.clone(),
+            service.path.clone(),
             name,
             mode,
         ));
-        exe_path(service_path).map_err(TearDownError::FindingExePath)?
-    } else if has_timer {
+        service.exe_path().map_err(TearDownError::FindingExePath)?
+    } else if timer.our_service() {
         return Err(TearDownError::TimerWithoutService);
     } else {
         return Ok(None);
     };
 
     Ok(Some((steps, exe_path)))
-}
-
-/// The executables location could not be found. It is needed to safely
-/// uninstall.
-#[derive(Debug, thiserror::Error)]
-pub enum FindExeError {
-    #[error("Could not read systemd unit file at: {path}, error: {err}")]
-    ReadingUnit { err: std::io::Error, path: PathBuf },
-    #[error("ExecStart (use to find binary) is missing from servic unit at: {0}")]
-    ExecLineMissing(PathBuf),
-    #[error("Path to binary extracted from systemd unit does not lead to a file, path: {0}")]
-    ExacPathNotFile(PathBuf),
-}
-
-fn exe_path(service_unit: PathBuf) -> Result<PathBuf, FindExeError> {
-    let unit = std::fs::read_to_string(&service_unit).map_err(|err| FindExeError::ReadingUnit {
-        err,
-        path: service_unit.clone(),
-    })?;
-    let path = unit
-        .lines()
-        .map(str::trim)
-        .find_map(|l| l.strip_prefix("ExecStart="))
-        .map(extract_path::split_unescaped_whitespace_once)
-        .ok_or(FindExeError::ExecLineMissing(service_unit))?;
-    let path = PathBuf::from_str(&path).expect("infallible");
-    if path.is_file() {
-        Ok(path)
-    } else {
-        Err(FindExeError::ExacPathNotFile(path))
-    }
 }
 
 /// There are other paths, but for now we return the most commonly used one
@@ -174,16 +150,6 @@ fn user_path() -> Result<PathBuf, NoHomeError> {
 /// There are other paths, but for now we return the most commonly used one
 fn system_path() -> PathBuf {
     PathBuf::from("/etc/systemd/system")
-}
-
-fn our_service(service_path: &Path) -> Result<bool, Error> {
-    use super::{COMMENT_PREAMBLE, COMMENT_SUFFIX};
-    let service = match fs::read_to_string(service_path) {
-        Ok(service) => service,
-        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(false),
-        Err(e) => return Err(Error::Verifying(e)),
-    };
-    Ok(service.contains(COMMENT_PREAMBLE) && service.contains(COMMENT_SUFFIX))
 }
 
 fn systemctl(args: &[&'static str], service: &OsStr) -> Result<(), SystemCtlError> {
@@ -223,20 +189,40 @@ fn wait_for(
     Err(timeout_error)
 }
 
-fn enable(unit: &OsStr, mode: Mode) -> Result<(), SystemCtlError> {
-    let args = match mode {
-        Mode::System => &["enable", "--now"][..],
-        Mode::User => &["enable", "--user", "--now"][..],
+fn enable(unit: &OsStr, mode: Mode, start: bool) -> Result<(), SystemCtlError> {
+    let mut args = match mode {
+        Mode::System => vec!["enable"],
+        Mode::User => vec!["enable", "--user"],
     };
-    systemctl(args, unit)?;
+
+    if start {
+        args.push("--now");
+    }
+
+    systemctl(&args, unit)?;
     wait_for(unit, true, mode, SystemCtlError::EnableTimeOut)
 }
 
-fn disable(unit: &OsStr, mode: Mode) -> Result<(), SystemCtlError> {
-    let args = match mode {
-        Mode::System => &["disable", "--now"][..],
-        Mode::User => &["disable", "--user", "--now"][..],
+fn disable(unit: &OsStr, mode: Mode, start: bool) -> Result<(), SystemCtlError> {
+    let mut args = match mode {
+        Mode::System => vec!["disable"],
+        Mode::User => vec!["disable", "--user"],
     };
-    systemctl(args, unit)?;
+
+    if start {
+        args.push("--now");
+    }
+
+    systemctl(&args, unit)?;
     wait_for(unit, false, mode, SystemCtlError::DisableTimeOut)
+}
+
+fn stop(unit: &OsStr, mode: Mode) -> Result<(), SystemCtlError> {
+    let args = match mode {
+        Mode::System => &["stop"][..],
+        Mode::User => &["stop", "--user"][..],
+    };
+
+    systemctl(args, unit)?;
+    wait_for(unit, false, mode, SystemCtlError::StopTimeOut)
 }
