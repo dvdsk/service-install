@@ -17,9 +17,9 @@ impl RemoveStep for RemoveService {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Removed",
-            Tense::Present => "Removing",
+            Tense::Questioning => "Remove",
             Tense::Future => "Will remove",
-            Tense::Active => "Remove",
+            Tense::Active => "Removing",
         };
         let path = self.path.display();
         format!("{verb} systemd service unit at:\n|\t{path}")
@@ -41,14 +41,14 @@ impl RemoveStep for DisableService {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Disabled",
-            Tense::Present => "Disabling",
+            Tense::Questioning => "Disable",
             Tense::Future => "Will disable",
-            Tense::Active => "Disable",
+            Tense::Active => "Disabling",
         };
         let stop = if self.stop {
             match tense {
                 Tense::Past => "and stopped ",
-                Tense::Present | Tense::Future => "and stop ",
+                Tense::Questioning | Tense::Future => "and stop ",
                 Tense::Active => "and stopping ",
             }
         } else {
@@ -72,9 +72,9 @@ impl RemoveStep for RemoveTimer {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Removed",
-            Tense::Present => "Removing",
+            Tense::Questioning => "Remove",
             Tense::Future => "Will remove",
-            Tense::Active => "Remove",
+            Tense::Active => "Removing",
         };
         let path = self.path.display();
         format!("{verb} systemd timer at:\n|\t{path}")
@@ -95,9 +95,9 @@ impl RemoveStep for DisableTimer {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Disabled",
-            Tense::Present => "Disabling",
+            Tense::Questioning => "Disable",
             Tense::Future => "Will disable",
-            Tense::Active => "Disable",
+            Tense::Active => "Disabling",
         };
         format!("{verb} systemd {} timer: {}", self.mode, self.name)
     }

@@ -19,7 +19,7 @@ pub enum FindExeError {
     #[error("ExecStart (use to find binary) is missing from servic unit at: {0}")]
     ExecLineMissing(PathBuf),
     #[error("Path to binary extracted from systemd unit does not lead to a file, path: {0}")]
-    ExacPathNotFile(PathBuf),
+    ExecPathNotFile(PathBuf),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -51,7 +51,7 @@ impl Unit {
         if exe_path.is_file() {
             Ok(exe_path)
         } else {
-            Err(FindExeError::ExacPathNotFile(exe_path))
+            Err(FindExeError::ExecPathNotFile(exe_path))
         }
     }
 

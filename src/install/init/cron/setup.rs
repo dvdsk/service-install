@@ -43,19 +43,14 @@ pub(crate) fn set_up_steps(params: &Params) -> Result<Steps, SetupError> {
     let to_remove = current
         .windows(landmark_comment.lines().count() + 1)
         .map(|w| w.split_last().expect("window size always >= 2"))
-        .find(|(_, comments)| {
-            comments
-                .iter()
-                .map(Line::text)
-                .eq(landmark_comment.lines())
-        });
+        .find(|(_, comments)| comments.iter().map(Line::text).eq(landmark_comment.lines()));
 
     let mut steps = Vec::new();
     if let Some((rule, comment)) = to_remove {
         steps.push(Box::new(RemovePrevious {
             comments: comment.to_vec(),
             rule: rule.clone(),
-            user: params.run_as.clone()
+            user: params.run_as.clone(),
         }) as Box<dyn InstallStep>);
     }
 
@@ -98,9 +93,9 @@ impl InstallStep for Add {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Appended",
-            Tense::Present => "Appending",
+            Tense::Questioning => "Append",
             Tense::Future => "Will append",
-            Tense::Active => "Append",
+            Tense::Active => "Appending",
         };
         if let Some(run_as) = &self.user {
             format!("{verb} comment and rule to {run_as}'s crontab")
@@ -112,9 +107,9 @@ impl InstallStep for Add {
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Appended",
-            Tense::Present => "Appending",
+            Tense::Questioning => "Append",
             Tense::Future => "Will append",
-            Tense::Active => "Append",
+            Tense::Active => "Appending",
         };
         let Self {
             comment,
@@ -162,9 +157,9 @@ impl InstallStep for RemovePrevious {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Removed",
-            Tense::Present => "Removing",
+            Tense::Questioning => "Remove",
             Tense::Future => "Will remove",
-            Tense::Active => "Remove",
+            Tense::Active => "Removing",
         };
         let user = self
             .user
@@ -177,9 +172,9 @@ impl InstallStep for RemovePrevious {
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Removed",
-            Tense::Present => "Removing",
+            Tense::Questioning => "Remove",
             Tense::Future => "Will remove",
-            Tense::Active => "Remove",
+            Tense::Active => "Removing",
         };
         let user = self
             .user

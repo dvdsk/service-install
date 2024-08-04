@@ -7,13 +7,13 @@ use std::path::{Path, PathBuf};
 
 use itertools::Itertools;
 
-use crate::install::files::id_process_parent::IdRes;
+use crate::install::files::process_parent::IdRes;
 use crate::install::RemoveStep;
 
 use super::init::PathCheckError;
 use super::{init, InstallError, InstallStep, Mode, RemoveError, RollbackStep, Tense};
 
-mod id_process_parent;
+mod process_parent;
 
 #[derive(thiserror::Error, Debug)]
 pub enum MoveError {
@@ -72,9 +72,9 @@ impl InstallStep for Move {
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Copied",
-            Tense::Present => "Copying",
+            Tense::Questioning => "Copy",
             Tense::Future => "Will copy",
-            Tense::Active => "Copy",
+            Tense::Active => "Copying",
         };
         let name = self.name.to_string_lossy();
         let source = self
@@ -93,9 +93,9 @@ impl InstallStep for Move {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Copied",
-            Tense::Present => "Copying",
+            Tense::Questioning => "Copy",
             Tense::Future => "Will copy",
-            Tense::Active => "Copy",
+            Tense::Active => "Copying",
         };
         let name = self.name.to_string_lossy();
         let target = self
@@ -121,8 +121,9 @@ struct SetRootOwner {
 impl InstallStep for SetRootOwner {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            Tense::Past | Tense::Active => "Set",
-            Tense::Present => "Setting",
+            Tense::Past => "Set",
+            Tense::Active => "Setting",
+            Tense::Questioning => "Set",
             Tense::Future => "Will set",
         };
         format!("{verb} executables owner to root")
@@ -152,9 +153,9 @@ impl InstallStep for MakeReadOnly {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Made",
-            Tense::Present => "Making",
+            Tense::Questioning => "Make",
             Tense::Future => "Will make",
-            Tense::Active => "Make",
+            Tense::Active => "Making",
         };
         format!("{verb} the executable read only")
     }
@@ -187,7 +188,8 @@ impl RollbackStep for RestorePermissions {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Restored",
-            Tense::Active | Tense::Present => "Restoring",
+            Tense::Active => "Restoring",
+            Tense::Questioning => "Restore",
             Tense::Future => "Will Restore",
         };
         format!("{verb} executables previous permissions")
@@ -270,9 +272,9 @@ impl InstallStep for MakeRemovable {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Made",
-            Tense::Present => "Making",
+            Tense::Questioning => "Make",
             Tense::Future => "Will make",
-            Tense::Active => "Make",
+            Tense::Active => "Making",
         };
         format!("{verb} the file taking up the install location removable")
     }
@@ -280,9 +282,9 @@ impl InstallStep for MakeRemovable {
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Made",
-            Tense::Present => "Making",
+            Tense::Questioning => "Make",
             Tense::Future => "Will make",
-            Tense::Active => "Make",
+            Tense::Active => "Making",
         };
         format!("A read only file is taking up the install location. {verb} it removable by making it writable\n| file:\n|\t{}", self.0.display())
     }
@@ -334,7 +336,7 @@ impl Display for TargetInUseError {
             TargetInUseError::CouldNotDisable(err) => {
                 writeln!(
                     f,
-                    "Could not disable the service keeping the file in use. {err}"
+                    "The file we need to replace is in use by a running service however we could not disable that service. {err}"
                 )
             }
         }
@@ -347,14 +349,21 @@ fn disable_if_running(
     mode: Mode,
     run_as: Option<&str>,
 ) -> Result<Vec<Box<dyn InstallStep>>, TargetInUseError> {
-    let (init, pid) = match id_process_parent::check(target, init_systems)? {
-        IdRes::ParentIsInit { init, pid } => (init, pid),
-        IdRes::NotRunning => return Ok(Vec::new()), // aka None
-        IdRes::NoParent => return Err(TargetInUseError::NoParent)?,
-        IdRes::ParentNotInit { parents } => return Err(TargetInUseError::Parents(parents)),
-    };
+    let mut steps = Vec::new();
 
-    init.disable_steps(target, pid, mode, run_as)
+    for parent_info in process_parent::list(target, init_systems)? {
+        match parent_info {
+            IdRes::ParentIsInit { init, pid } => {
+                steps.append(&mut init.disable_steps(target, pid, mode, run_as)?)
+            }
+            IdRes::NoParent => return Err(TargetInUseError::NoParent)?,
+            IdRes::ParentNotInit { parents } => {
+                steps.push(process_parent::notify_steps(parents))
+            }
+        }
+    }
+
+    Ok(steps)
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -386,9 +395,9 @@ impl RemoveStep for Remove {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Removed",
-            Tense::Present => "Removing",
+            Tense::Questioning => "Remove",
             Tense::Future => "Will remove",
-            Tense::Active => "Remove",
+            Tense::Active => "Removing",
         };
         let bin = self
             .target
@@ -401,9 +410,9 @@ impl RemoveStep for Remove {
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Removed",
-            Tense::Present => "Removing",
+            Tense::Questioning => "Remove",
             Tense::Future => "Will remove",
-            Tense::Active => "Remove",
+            Tense::Active => "Removing",
         };
         let bin = self
             .target

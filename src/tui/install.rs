@@ -9,8 +9,8 @@ use dialoguer::Select;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("canceld by the user")]
-    Canceld,
+    #[error("canceled by the user")]
+    Canceled,
     #[error("could not get input from the user: {0}")]
     UserInputFailed(#[from] dialoguer::Error),
     #[error("ran into one or more errors and user chose to abort, errors: {0:#?}")]
@@ -27,7 +27,7 @@ pub enum Error {
 /// abort, abort and try to roll back the changes made or continue.
 ///
 /// # Errors
-/// This returns an error if the user canceld the removal, something
+/// This returns an error if the user canceled the removal, something
 /// went wrong getting user input or anything during the removal failed.
 ///
 /// In that last case either [`AbortedAfterError`](Error::AbortedAfterError),
@@ -35,16 +35,20 @@ pub enum Error {
 /// [`RollbackFollowingCancel`](Error::RollbackFollowingCancel) is returned
 /// depending on whether: the user aborted after the error, a rollback failed
 /// was started after an install error but the rollback failed *or* happened
-/// during install or a rollback was started after the user canceld but it
+/// during install or a rollback was started after the user canceled but it
 /// failed.
-pub fn start(steps: InstallSteps) -> Result<(), Error> {
+pub fn start(steps: InstallSteps, detailed: bool) -> Result<(), Error> {
     let mut errors = Vec::new();
     let mut rollback_steps = Vec::new();
     for mut step in steps {
-        println!("{}", step.describe(Tense::Active));
+        if detailed {
+            println!("{}", step.describe_detailed(Tense::Questioning));
+        } else {
+            println!("{}", step.describe(Tense::Questioning));
+        }
         if !Confirm::new().interact()? {
             rollback_if_user_wants_to(rollback_steps)?;
-            return Err(Error::Canceld);
+            return Err(Error::Canceled);
         }
 
         match step.perform() {

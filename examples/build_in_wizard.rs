@@ -16,7 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(steps) => steps,
     };
 
-    if let Err(e) = tui::install::start(steps) {
+    if let Err(e) = tui::install::start(steps, false) {
         eprintln!("Install failed: {e}")
     }
 

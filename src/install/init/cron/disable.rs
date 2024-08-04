@@ -87,7 +87,7 @@ impl InstallStep for Kill {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Stopped",
-            Tense::Present => "Stop",
+            Tense::Questioning => "Stop",
             Tense::Future => "Will stop",
             Tense::Active => "Stopping",
         };
@@ -98,7 +98,7 @@ impl InstallStep for Kill {
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Stopped",
-            Tense::Present => "Stop",
+            Tense::Questioning => "Stop",
             Tense::Future => "Will stop",
             Tense::Active => "Stopping",
         };
@@ -155,7 +155,7 @@ impl InstallStep for CommentOutRule {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Commented out",
-            Tense::Present => "Comment out",
+            Tense::Questioning => "Comment out",
             Tense::Future => "Will comment out",
             Tense::Active => "Commenting out",
         };
@@ -165,7 +165,7 @@ impl InstallStep for CommentOutRule {
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Commented out",
-            Tense::Present => "Comment out",
+            Tense::Questioning => "Comment out",
             Tense::Future => "Will comment out",
             Tense::Active => "Commenting out",
         };
@@ -245,7 +245,7 @@ impl RollbackStep for RollbackCommentOut {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Uncommented",
-            Tense::Present => "Uncomment",
+            Tense::Questioning => "Uncomment",
             Tense::Future => "Will uncomment",
             Tense::Active => "Uncommenting",
         };

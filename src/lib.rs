@@ -5,7 +5,7 @@
 /// [Rollback](install::RollbackStep).
 pub enum Tense {
     Past,
-    Present,
+    Questioning,
     Future,
     Active,
 }

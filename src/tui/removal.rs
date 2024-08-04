@@ -7,8 +7,8 @@ use dialoguer;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("The removal was canceld by the user")]
-    Canceld,
+    #[error("The removal was canceled by the user")]
+    Canceled,
     #[error("User aborted removal after one or more errors happened, errors: {0:?}")]
     AbortedAfterError(Vec<RemoveError>),
     #[error("Removal done however one or more errors happened, errors: {0:?}")]
@@ -22,7 +22,7 @@ pub enum Error {
 /// be prompted if they wish to continue or abort.
 ///
 /// # Errors
-/// This returns an error if the user canceld the removal, something went wrong
+/// This returns an error if the user canceled the removal, something went wrong
 /// getting user input or anything during the removal failed.
 ///
 /// In that last case either [`AbortedAfterError`](Error::AbortedAfterError) or
@@ -32,10 +32,10 @@ pub fn start(steps: RemoveSteps) -> Result<(), Error> {
     let mut errors = Vec::new();
     for mut step in steps {
         if !Confirm::new()
-            .with_prompt(format!("{}?", step.describe(Tense::Present)))
+            .with_prompt(format!("{}?", step.describe(Tense::Questioning)))
             .interact()?
         {
-            return Err(Error::Canceld);
+            return Err(Error::Canceled);
         }
 
         if let Err(e) = step.perform() {

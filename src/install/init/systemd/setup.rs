@@ -23,9 +23,9 @@ impl InstallStep for Service {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Wrote",
-            Tense::Present => "Writing",
+            Tense::Questioning => "Write",
             Tense::Future => "Will write",
-            Tense::Active => "Write",
+            Tense::Active => "Writing",
         };
         let path = self.path.display();
         format!("{verb} systemd service unit to:\n\t{path}")
@@ -34,9 +34,9 @@ impl InstallStep for Service {
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Wrote",
-            Tense::Present => "Writing",
+            Tense::Questioning => "Write",
             Tense::Future => "Will write",
-            Tense::Active => "Write",
+            Tense::Active => "Writing",
         };
         let path = self.path.display();
         let content = self.unit.trim_end().replace('\n', "\n|\t");
@@ -63,9 +63,9 @@ impl InstallStep for Timer {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Wrote",
-            Tense::Present => "Writing",
+            Tense::Questioning => "Write",
             Tense::Future => "Will write",
-            Tense::Active => "Write",
+            Tense::Active => "Writing",
         };
         let path = self.path.display();
         format!("{verb} systemd timer unit to:\n\t{path}")
@@ -74,9 +74,9 @@ impl InstallStep for Timer {
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Wrote",
-            Tense::Present => "Writing",
+            Tense::Questioning => "Write",
             Tense::Future => "Will write",
-            Tense::Active => "Write",
+            Tense::Active => "Writing",
         };
         let path = self.path.display();
         let content = self.unit.trim_end().replace('\n', "\n|\t");
@@ -103,9 +103,9 @@ impl InstallStep for EnableTimer {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Enabled",
-            Tense::Present => "Enabling",
+            Tense::Questioning => "Enable",
             Tense::Future => "Will Enable",
-            Tense::Active => "Enable",
+            Tense::Active => "Enabling",
         };
         format!("{verb} systemd {} timer: {}", self.mode, self.name)
     }
@@ -130,14 +130,15 @@ impl InstallStep for EnableService {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Enabled",
-            Tense::Present => "Enabling",
+            Tense::Questioning => "Enable",
             Tense::Future => "Will Enable",
-            Tense::Active => "Enable",
+            Tense::Active => "Enabling",
         };
         let start = if self.start {
             match tense {
                 Tense::Past => "and started ",
-                Tense::Present | Tense::Future => "and start ",
+                Tense::Questioning => "and start ",
+                Tense::Future => "and start ",
                 Tense::Active => "and starting ",
             }
         } else {
@@ -202,11 +203,7 @@ fn render_service(params: &Params) -> String {
     let description = params.description();
 
     let exe_path = exe_path.shell_escaped();
-    let exe_args: String = Itertools::intersperse(
-        exe_args.iter().map(String::shell_escaped),
-        String::from(" "),
-    )
-    .collect();
+    let exe_args: String = exe_args.iter().map(String::shell_escaped).join(" \\\n\t");
 
     let working_dir_section = working_dir
         .as_ref()

@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::{fs, io};
 
 use itertools::Itertools;
+use tracing::debug;
 
 use crate::install::{InstallError, InstallStep, RollbackError, RollbackStep};
 use crate::Tense;
@@ -27,7 +28,7 @@ impl RollbackStep for ReEnable {
         let verb = match tense {
             Tense::Past => "Re-enabled",
             Tense::Active => "Re-enabling",
-            Tense::Present => "Re-enable",
+            Tense::Questioning => "Re-enable",
             Tense::Future => "Will re-enable",
         };
         format!(
@@ -48,7 +49,7 @@ impl InstallStep for Disable {
         let verb = match tense {
             Tense::Past => "Disabled",
             Tense::Active => "Disabling",
-            Tense::Present => "Disable",
+            Tense::Questioning => "Disable",
             Tense::Future => "Will disable",
         };
         format!(
@@ -61,7 +62,7 @@ impl InstallStep for Disable {
         let verb = match tense {
             Tense::Past => "Disabled",
             Tense::Active => "Disabling",
-            Tense::Present => "Disable",
+            Tense::Questioning => "Disable",
             Tense::Future => "Will disable",
         };
         #[allow(clippy::format_collect)]
@@ -122,7 +123,7 @@ pub enum DisableError {
     CouldNotFindIt(#[from] FindError),
     #[error("Could not open systemd unit: {0}")]
     CouldNotReadUnit(#[from] unit::Error),
-    #[error("No service or timer found that could have started the service")]
+    #[error("Could not find the service or (timer) that keeps the file in use")]
     NoServiceOrTimerFound,
 }
 
@@ -148,7 +149,6 @@ pub(crate) fn disable_step(
         .map_err(DisableError::CouldNotReadUnit)?;
 
     let services = find_services_with_target_exe(services, target)?;
-    // extensions are the problem here
     let names: HashSet<_> = services.iter().map(Unit::name).collect();
     let mut timers: Vec<_> = timers
         .into_iter()
@@ -181,11 +181,11 @@ fn find_services_with_target_exe(units: Vec<Unit>, target: &Path) -> Result<Vec<
         .map_ok(|(_, unit)| unit)
         .partition_result();
 
-    if units.is_empty() && !errs.is_empty() {
-        Err(FindError::Errors(errs))
-    } else {
-        Ok(units)
+    if !errs.is_empty() {
+        debug!("Some service files failed to parse: {errs:#?}")
     }
+
+    Ok(units)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -193,7 +193,7 @@ pub enum FindError {
     #[error(
         "No service spawning the target file found, could not parse some services however: {0:#?}"
     )]
-    Errors(Vec<FindExeError>),
+    NotFoundWithErrors(Vec<FindExeError>),
     #[error("Could not read directory")]
     CouldNotReadDir(#[from] std::io::Error),
 }

@@ -98,9 +98,9 @@ impl RemoveStep for RemoveInstalled {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Removed",
-            Tense::Present => "Removing",
+            Tense::Questioning => "Remove",
             Tense::Future => "Will remove",
-            Tense::Active => "Remove",
+            Tense::Active => "Removing",
         };
         let user = self
             .user
@@ -113,9 +113,9 @@ impl RemoveStep for RemoveInstalled {
     fn describe_detailed(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Removed",
-            Tense::Present => "Removing",
+            Tense::Questioning => "Remove",
             Tense::Future => "Will remove",
-            Tense::Active => "Remove",
+            Tense::Active => "Removing",
         };
         let user = self
             .user
