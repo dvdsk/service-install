@@ -7,10 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+# Version 0.4.3 (2024-04-21)
+
+### Fixed
+- Make the executable readable and executable but remove all others if readonly
+  is set
+
 # Version 0.4.2 (2024-04-21)
 
 ### Changed
-- When overwrit is enabled and a file taking up the install location is being
+- When overwrite is enabled and a file taking up the install location is being
   ran by a service the service is stopped and disabled. If the service was
   created by us previously it is removed too.
 

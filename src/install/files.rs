@@ -145,11 +145,11 @@ pub enum SetReadOnlyError {
     SetPermissions(std::io::Error),
 }
 
-struct MakeReadOnly {
+struct MakeReadExecOnly {
     path: PathBuf,
 }
 
-impl InstallStep for MakeReadOnly {
+impl InstallStep for MakeReadExecOnly {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Made",
@@ -157,15 +157,17 @@ impl InstallStep for MakeReadOnly {
             Tense::Future => "Will make",
             Tense::Active => "Making",
         };
-        format!("{verb} the executable read only")
+        format!("{verb} the executable read and execute only")
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
+        use std::os::unix::fs::PermissionsExt;
+
         let org_permissions = fs::metadata(&self.path)
             .map_err(SetReadOnlyError::GetPermissions)?
             .permissions();
         let mut permissions = org_permissions.clone();
-        permissions.set_readonly(true);
+        permissions.set_mode(555);
         fs::set_permissions(&self.path, permissions).map_err(SetReadOnlyError::SetPermissions)?;
         Ok(Some(Box::new(RestorePermissions {
             path: self.path.clone(),
@@ -236,7 +238,7 @@ pub(crate) fn move_files(
             source,
             target: target.clone(),
         }) as Box<dyn InstallStep>,
-        Box::new(MakeReadOnly {
+        Box::new(MakeReadExecOnly {
             path: target.clone(),
         }),
     ]);
@@ -357,9 +359,7 @@ fn disable_if_running(
                 steps.append(&mut init.disable_steps(target, pid, mode, run_as)?)
             }
             IdRes::NoParent => return Err(TargetInUseError::NoParent)?,
-            IdRes::ParentNotInit { parents } => {
-                steps.push(process_parent::notify_steps(parents))
-            }
+            IdRes::ParentNotInit { parents } => steps.push(process_parent::notify_steps(parents)),
         }
     }
 
