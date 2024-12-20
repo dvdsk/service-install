@@ -308,7 +308,7 @@ impl InstallSteps {
     /// installing. For example all disk space could be used. Or the install
     /// could run into an error that was not checked for while preparing. If you
     /// find this happens please make an issue.
-    pub fn install(self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn install(self) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let mut description = Vec::new();
         for mut step in self.0 {
             description.push(step.describe(Tense::Past));
@@ -465,7 +465,7 @@ impl RemoveSteps {
     /// the install. For example a file could have been removed by the user of
     /// the system. Or the removal could run into an error that was not checked
     /// for while preparing. If you find this happens please make an issue.
-    pub fn remove(self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn remove(self) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let mut description = Vec::new();
         for mut step in self.0 {
             description.push(step.describe(Tense::Past));

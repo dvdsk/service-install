@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+# Version 0.4.4 (2024-12-20)
+### Changed
+- Made error returned by install and removal implement Send+Sync+'static. This makes it easily to use with error crates such as eyre and anyhow
+
 # Version 0.4.3 (2024-04-21)
 
 ### Fixed

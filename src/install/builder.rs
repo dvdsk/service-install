@@ -17,8 +17,6 @@ pub struct UserInstall;
 pub struct SystemInstall;
 
 pub trait ToAssign {}
-pub trait Assigned: ToAssign {}
-pub trait NotAssigned: ToAssign {}
 
 impl ToAssign for Set {}
 impl ToAssign for NotSet {}
