@@ -4,7 +4,7 @@ use service_install::{install_user, Tense};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let steps = install_user!()
         .current_exe()?
-        .name("cli")
+        .service_name("cli")
         .on_boot()
         .prepare_install()?;
 
@@ -44,6 +44,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // lets remove the install to prevent polluting the system
-    install_user!().name("cli").prepare_remove()?.best_effort_remove()?;
+    install_user!().service_name("cli").prepare_remove()?.best_effort_remove()?;
     Ok(())
 }

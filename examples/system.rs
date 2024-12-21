@@ -6,7 +6,7 @@ fn main() {
     install_system!()
         .current_exe()
         .unwrap()
-        .name("cli")
+        .service_name("cli")
         .on_schedule(schedule)
         .run_as("david")
         .prepare_install()
@@ -15,7 +15,7 @@ fn main() {
         .unwrap();
 
     install_system!()
-        .name("cli")
+        .service_name("cli")
         .prepare_remove()
         .unwrap()
         .remove()

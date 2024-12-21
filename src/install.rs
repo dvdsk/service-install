@@ -336,7 +336,7 @@ impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
         let builder::Spec {
             mode,
             path: Some(source),
-            name: Some(name),
+            service_name: Some(name),
             bin_name,
             args,
             trigger: Some(trigger),
@@ -531,7 +531,7 @@ impl<P: ToAssign, T: ToAssign, I: ToAssign> Spec<P, builder::Set, T, I> {
     pub fn prepare_remove(self) -> Result<RemoveSteps, PrepareRemoveError> {
         let builder::Spec {
             mode,
-            name: Some(name),
+            service_name: Some(name),
             bin_name,
             run_as,
             ..

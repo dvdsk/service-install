@@ -7,7 +7,7 @@ fn main() {
     let steps = install_system!()
         .current_exe()
         .unwrap()
-        .name("cli")
+        .service_name("cli")
         .on_schedule(schedule)
         .allowed_inits(&[init::System::Cron])
         .run_as("work")
@@ -21,7 +21,7 @@ fn main() {
     println!("Install complete\n\n");
 
     let steps = install_system!()
-        .name("cli")
+        .service_name("cli")
         .run_as("work")
         .prepare_remove()
         .unwrap();

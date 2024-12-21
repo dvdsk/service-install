@@ -6,7 +6,7 @@ fn main() {
     let done = install_user!()
         .current_exe()
         .unwrap()
-        .name("cli")
+        .service_name("cli")
         .on_schedule(schedule)
         .prepare_install()
         .unwrap()
@@ -16,7 +16,7 @@ fn main() {
     println!("Install complete, did: \n{done}");
 
     let done = install_user!()
-        .name("cli")
+        .service_name("cli")
         .prepare_remove()
         .unwrap()
         .remove()

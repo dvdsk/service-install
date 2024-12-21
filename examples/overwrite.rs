@@ -7,7 +7,7 @@ use service_install::{install::init, install_user};
 
 fn cleanup() {
     // cleanup
-    let steps = install_user!().name("cli").prepare_remove().unwrap();
+    let steps = install_user!().service_name("cli").prepare_remove().unwrap();
     for mut step in steps {
         println!("{}", step.describe_detailed(Tense::Questioning));
         step.perform().unwrap();
@@ -19,7 +19,7 @@ fn install(schedule: Option<Schedule>) {
     let spec = install_user!()
         .current_exe()
         .unwrap()
-        .name("cli")
+        .service_name("cli")
         .arg("--simulate-service")
         .allowed_inits(&[init::System::Systemd])
         .overwrite_existing(true);

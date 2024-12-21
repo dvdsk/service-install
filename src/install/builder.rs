@@ -44,7 +44,7 @@ where
 {
     pub(crate) mode: Mode,
     pub(crate) path: Option<PathBuf>,
-    pub(crate) name: Option<String>,
+    pub(crate) service_name: Option<String>,
     pub(crate) trigger: Option<Trigger>,
     pub(crate) description: Option<String>,
     pub(crate) working_dir: Option<PathBuf>,
@@ -86,7 +86,7 @@ impl Spec<NotSet, NotSet, NotSet, NotSet> {
         Spec {
             mode: Mode::System,
             path: None,
-            name: None,
+            service_name: None,
             trigger: None,
             description: None,
             working_dir: None,
@@ -111,7 +111,7 @@ impl Spec<NotSet, NotSet, NotSet, NotSet> {
         Spec {
             mode: Mode::User,
             path: None,
-            name: None,
+            service_name: None,
             trigger: None,
             description: None,
             working_dir: None,
@@ -153,7 +153,7 @@ where
         Spec {
             mode: self.mode,
             path: Some(path.into()),
-            name: self.name,
+            service_name: self.service_name,
             trigger: self.trigger,
             description: self.description,
             working_dir: self.working_dir,
@@ -180,7 +180,7 @@ where
         Ok(Spec {
             mode: self.mode,
             path: Some(std::env::current_exe()?),
-            name: self.name,
+            service_name: self.service_name,
             trigger: self.trigger,
             description: self.description,
             working_dir: self.working_dir,
@@ -197,11 +197,15 @@ where
         })
     }
 
-    pub fn name(self, name: impl Display) -> Spec<Path, Set, TriggerSet, InstallType> {
+    /// Name to give the systemd service or cron job
+    pub fn service_name(
+        self,
+        service_name: impl Display,
+    ) -> Spec<Path, Set, TriggerSet, InstallType> {
         Spec {
             mode: self.mode,
             path: self.path,
-            name: Some(name.to_string()),
+            service_name: Some(service_name.to_string()),
             trigger: self.trigger,
             description: self.description,
             working_dir: self.working_dir,
@@ -222,7 +226,7 @@ where
         Spec {
             mode: self.mode,
             path: self.path,
-            name: self.name,
+            service_name: self.service_name,
             trigger: Some(Trigger::OnSchedule(schedule)),
             description: self.description,
             working_dir: self.working_dir,
@@ -239,13 +243,13 @@ where
         }
     }
 
-    /// Start the job on boot. When cron is used as init the system needs 
+    /// Start the job on boot. When cron is used as init the system needs
     /// to be rebooted before this applies
     pub fn on_boot(self) -> Spec<Path, Name, Set, InstallType> {
         Spec {
             mode: self.mode,
             path: self.path,
-            name: self.name,
+            service_name: self.service_name,
             trigger: Some(Trigger::OnBoot),
             description: self.description,
             working_dir: self.working_dir,
@@ -288,6 +292,7 @@ where
         self
     }
 
+    /// The working directory of the program when it is started on a schedule
     pub fn working_dir(mut self, dir: PathBuf) -> Self {
         self.working_dir = Some(dir);
         self

@@ -9,7 +9,7 @@ fn main() {
     let steps = install_user!()
         .current_exe()
         .unwrap()
-        .name("cli")
+        .service_name("cli")
         .on_schedule(schedule)
         .allowed_inits(&[init::System::Cron])
         .prepare_install()
@@ -21,7 +21,7 @@ fn main() {
     }
     println!("Install complete\n\n");
 
-    let steps = install_user!().name("cli").prepare_remove().unwrap();
+    let steps = install_user!().service_name("cli").prepare_remove().unwrap();
 
     for mut step in steps {
         println!("{}", step.describe_detailed(Tense::Questioning));
