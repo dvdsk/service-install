@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+# Version 0.5.0 (2024-12-20)
+### Changed
+- Install spec builder's `name` member renamed to `service_name` to highlight
+  that it sets the name for the con job or systemd service and not the
+  executable that is installed
+
 # Version 0.4.4 (2024-12-20)
 ### Changed
 - Made error returned by install and removal implement Send+Sync+'static. This makes it easily to use with error crates such as eyre and anyhow
