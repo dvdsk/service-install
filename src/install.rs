@@ -322,16 +322,16 @@ impl InstallSteps {
 impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
     /// Prepare for installing. This makes a number of checks and if they are
     /// passed it returns the [`InstallSteps`]. These implement [`IntoIterator`] and
-    /// can be inspected and executated one by one or executed in one step using
+    /// can be inspected and executed one by one or executed in one step using
     /// [`InstallSteps::install`].
     ///
     /// # Errors
     /// Returns an error if:
-    ///  - the install is set to be system wide install while not running as admin/superuser
-    ///  - the service should run as another user then the current one while not running as admin/superuser
-    ///  - the service should run for a nonexisting user
-    ///  - no suitable install directory could be found
-    ///  - the path for the executable does not point to a file
+    ///  - the install is set to be system wide install while not running as admin/superuser.
+    ///  - the service should run as another user then the current one while not running as admin/superuser.
+    ///  - the service should run for a non-existing user.
+    ///  - no suitable install directory could be found.
+    ///  - the path for the executable does not point to a file.
     pub fn prepare_install(self) -> Result<InstallSteps, PrepareInstallError> {
         let builder::Spec {
             mode,
@@ -517,17 +517,17 @@ impl Display for BestEffortRemoveError {
     }
 }
 
-impl<P: ToAssign, T: ToAssign, I: ToAssign> Spec<P, builder::Set, T, I> {
+impl<M: ToAssign, P: ToAssign, T: ToAssign> Spec<M, P, T, builder::Set> {
     /// Prepare for removing an install. This makes a number of checks and if
     /// they are passed it returns the [`RemoveSteps`]. These implement
-    /// [`IntoIterator`] and can be inspected and executated one by one or
+    /// [`IntoIterator`] and can be inspected and executed one by one or
     /// executed in one step using [`RemoveSteps::remove`].
     ///
     /// # Errors
     /// Returns an error if:
-    ///  - trying to remove a system install while not running as admin/superuser
-    ///  - no install is found
-    ///  - anything goes wrong setting up the removal
+    ///  - trying to remove a system install while not running as admin/superuser.
+    ///  - no install is found.
+    ///  - anything goes wrong setting up the removal.
     pub fn prepare_remove(self) -> Result<RemoveSteps, PrepareRemoveError> {
         let builder::Spec {
             mode,

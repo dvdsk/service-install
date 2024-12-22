@@ -198,6 +198,10 @@ where
     }
 
     /// Name to give the systemd service or cron job
+    ///
+    /// Only needed for *install*. During uninstall we recognize
+    /// the service or con job by the special comment service-install leaves
+    /// at the top of each
     pub fn service_name(
         self,
         service_name: impl Display,
