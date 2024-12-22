@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::install::InstallError;
 use crate::install::InstallSteps;
 use crate::install::RollbackError;
@@ -12,7 +14,11 @@ pub enum Error {
     #[error("canceled by the user")]
     Canceled,
     #[error("could not get input from the user")]
-    UserInputFailed(#[from] #[source] dialoguer::Error),
+    UserInputFailed(
+        #[from]
+        #[source]
+        dialoguer::Error,
+    ),
     #[error("ran into one or more errors and user chose to abort, errors: {0:#?}")]
     AbortedAfterError(Vec<InstallError>),
     #[error("user chose to cancel and rollback however rollback failed")]
@@ -39,7 +45,7 @@ pub enum Error {
 /// failed.
 pub fn start(steps: InstallSteps, detailed: bool) -> Result<(), Error> {
     let mut errors = Vec::new();
-    let mut rollback_steps = Vec::new();
+    let mut rollback_steps = VecDeque::new();
     for mut step in steps {
         if detailed {
             println!("{}", step.describe_detailed(Tense::Questioning));
@@ -53,7 +59,7 @@ pub fn start(steps: InstallSteps, detailed: bool) -> Result<(), Error> {
 
         match step.perform() {
             Ok(None) => (),
-            Ok(Some(rollback)) => rollback_steps.push(rollback),
+            Ok(Some(rollback)) => rollback_steps.push_front(rollback),
             Err(e) => {
                 let details = e.to_string().replace('\n', "\n\t");
                 errors.push(e);
@@ -77,7 +83,7 @@ pub fn start(steps: InstallSteps, detailed: bool) -> Result<(), Error> {
     Ok(())
 }
 
-fn rollback_if_user_wants_to(rollback_steps: Vec<Box<dyn RollbackStep>>) -> Result<(), Error> {
+fn rollback_if_user_wants_to(rollback_steps: VecDeque<Box<dyn RollbackStep>>) -> Result<(), Error> {
     if rollback_steps.is_empty() {
         println!("Install aborted, no changes have been made");
     } else if Confirm::new()
@@ -90,7 +96,7 @@ fn rollback_if_user_wants_to(rollback_steps: Vec<Box<dyn RollbackStep>>) -> Resu
     Ok(())
 }
 
-fn rollback(mut rollback_steps: Vec<Box<dyn RollbackStep>>) -> Result<(), RollbackError> {
+fn rollback(mut rollback_steps: VecDeque<Box<dyn RollbackStep>>) -> Result<(), RollbackError> {
     for step in &mut rollback_steps {
         let did = step.describe(Tense::Past);
         step.perform()?;

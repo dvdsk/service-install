@@ -18,7 +18,11 @@ mod process_parent;
 #[derive(thiserror::Error, Debug)]
 pub enum MoveError {
     #[error("could not find current users home dir")]
-    NoHome(#[from] #[source] NoHomeError),
+    NoHome(
+        #[from]
+        #[source]
+        NoHomeError,
+    ),
     #[error("none of the usual dirs for user binaries exist")]
     UserDirNotAvailable,
     #[error("none of the usual dirs for system binaries exist")]
@@ -30,7 +34,11 @@ pub enum MoveError {
     #[error("overwrite is not set and there is already a file named {name} at {}", dir.display())]
     TargetExists { name: String, dir: PathBuf },
     #[error("{0}")]
-    TargetInUse(#[from] #[source] TargetInUseError),
+    TargetInUse(
+        #[from]
+        #[source]
+        TargetInUseError,
+    ),
     #[error("could not check if already existing file is read only")]
     CheckExistingFilePermissions(#[source] std::io::Error),
 }
@@ -183,8 +191,16 @@ struct RestorePermissions {
 
 impl RollbackStep for RestorePermissions {
     fn perform(&mut self) -> Result<(), super::RollbackError> {
-        fs::set_permissions(&self.path, self.org_permissions.clone())
-            .map_err(super::RollbackError::RestoringPermissions)
+        match fs::set_permissions(&self.path, self.org_permissions.clone()) {
+            Ok(_) => Ok(()),
+            // overwrite may have been set or the file removed by the user
+            // we should no abort the rollback because the file is not there
+            Err(io) if io.kind() == std::io::ErrorKind::NotFound => {
+                tracing::warn!("Could not restore permissions, file is not there");
+                Ok(())
+            }
+            Err(other) => Err(super::RollbackError::RestoringPermissions(other)),
+        }
     }
 
     fn describe(&self, tense: Tense) -> String {
@@ -308,9 +324,17 @@ impl InstallStep for MakeRemovable {
 #[derive(Debug, thiserror::Error)]
 pub enum TargetInUseError {
     NoParent,
-    ResolvePath(#[from] #[source] PathCheckError),
+    ResolvePath(
+        #[from]
+        #[source]
+        PathCheckError,
+    ),
     Parents(Vec<PathBuf>),
-    CouldNotDisable(#[from] #[source] DisableError),
+    CouldNotDisable(
+        #[from]
+        #[source]
+        DisableError,
+    ),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -369,7 +393,11 @@ fn disable_if_running(
 #[derive(thiserror::Error, Debug)]
 pub enum DeleteError {
     #[error("could not find current users home dir")]
-    NoHome(#[from] #[source] NoHomeError),
+    NoHome(
+        #[from]
+        #[source]
+        NoHomeError,
+    ),
     #[error("none of the usual dirs for user binaries exist")]
     UserDirNotAvailable,
     #[error("none of the usual dirs for system binaries exist")]

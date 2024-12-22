@@ -6,8 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- no longer formatting source of error in an error's display implementation.
+  Instead relying on `std::error::Error::source`. Use color-eyre/anyhow to
+  display the error chain.
+### Fixed
+- rollback was performed in the wrong order
 
-# Version 0.5.1 (2024-12-22)
+# Version 0.5.2 (2024-12-22)
 ### Fixed
 - `prepare_remove` was broken in 0.5.0
 
