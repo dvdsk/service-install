@@ -1,6 +1,6 @@
 [package]
 name = "service-install"
-version = "0.5.0"
+version = "0.5.2"
 license = "MIT"
 description = "Easily provide users an install method on Linux systems"
 repository = "https://github.com/dvdsk/service-install"

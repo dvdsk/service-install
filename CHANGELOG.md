@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+# Version 0.5.1 (2024-12-22)
+### Fixed
+- `prepare_remove` was broken in 0.5.0
+
+# Version 0.5.1 (2024-12-22)
+YANKED (bad release)
+
 # Version 0.5.0 (2024-12-20)
 ### Changed
 - Install spec builder's `name` member renamed to `service_name` to highlight
