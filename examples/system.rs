@@ -15,7 +15,6 @@ fn main() {
         .unwrap();
 
     install_system!()
-        .service_name("cli")
         .prepare_remove()
         .unwrap()
         .remove()

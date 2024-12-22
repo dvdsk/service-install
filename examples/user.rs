@@ -16,7 +16,6 @@ fn main() {
     println!("Install complete, did: \n{done}");
 
     let done = install_user!()
-        .service_name("cli")
         .prepare_remove()
         .unwrap()
         .remove()

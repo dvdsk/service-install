@@ -21,7 +21,6 @@ fn main() {
     println!("Install complete\n\n");
 
     let steps = install_system!()
-        .service_name("cli")
         .run_as("work")
         .prepare_remove()
         .unwrap();

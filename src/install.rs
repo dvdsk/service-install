@@ -517,7 +517,7 @@ impl Display for BestEffortRemoveError {
     }
 }
 
-impl<M: ToAssign, P: ToAssign, T: ToAssign> Spec<M, P, T, builder::Set> {
+impl<M: ToAssign, P: ToAssign, T: ToAssign, I: ToAssign> Spec<M, P, T, I> {
     /// Prepare for removing an install. This makes a number of checks and if
     /// they are passed it returns the [`RemoveSteps`]. These implement
     /// [`IntoIterator`] and can be inspected and executed one by one or
