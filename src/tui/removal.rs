@@ -13,8 +13,8 @@ pub enum Error {
     AbortedAfterError(Vec<RemoveError>),
     #[error("Removal done however one or more errors happened, errors: {0:?}")]
     CompletedWithErrors(Vec<RemoveError>),
-    #[error("Could not get input from the user: {0}")]
-    UserInputFailed(#[from] dialoguer::Error),
+    #[error("Could not get input from the user")]
+    UserInputFailed(#[from] #[source] dialoguer::Error),
 }
 
 /// Start an interactive removal wizard using the provided [remove steps](RemoveSteps). This will ask

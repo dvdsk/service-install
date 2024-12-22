@@ -53,10 +53,10 @@ impl Display for Mode {
 #[allow(clippy::module_name_repetitions)]
 #[derive(thiserror::Error, Debug)]
 pub enum PrepareInstallError {
-    #[error("Error setting up init: {0}")]
-    Init(#[from] init::SetupError),
-    #[error("Failed to move files: {0}")]
-    Move(#[from] files::MoveError),
+    #[error("Error setting up init")]
+    Init(#[from] #[source] init::SetupError),
+    #[error("Failed to move files")]
+    Move(#[from] #[source] files::MoveError),
     #[error("Need to run as root to install to system")]
     NeedRootForSysInstall,
     #[error("Need to run as root to setup service to run as another user")]
@@ -87,12 +87,12 @@ pub struct InitSystemFailure {
 /// Errors that can occur when preparing for or removing an installation
 #[derive(thiserror::Error, Debug)]
 pub enum PrepareRemoveError {
-    #[error("Could not find this executable's location: {0}")]
-    GetExeLocation(std::io::Error),
-    #[error("Failed to remove files: {0}")]
-    Move(#[from] files::DeleteError),
-    #[error("Removing from init system: {0}")]
-    Init(#[from] init::TearDownError),
+    #[error("Could not find this executable's location")]
+    GetExeLocation(#[source] std::io::Error),
+    #[error("Failed to remove files")]
+    Move(#[from] #[source] files::DeleteError),
+    #[error("Removing from init system")]
+    Init(#[from] #[source] init::TearDownError),
     #[error("Could not find any installation in any init system")]
     NoInstallFound,
     #[error("Need to run as root to remove a system install")]
@@ -102,20 +102,20 @@ pub enum PrepareRemoveError {
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, thiserror::Error)]
 pub enum InstallError {
-    #[error("Could not get crontab, needed to add our lines, error: {0}")]
-    GetCrontab(#[from] init::cron::GetCrontabError),
-    #[error("{0}")]
+    #[error("Could not get crontab, needed to add our lines")]
+    GetCrontab(#[from] #[source] init::cron::GetCrontabError),
+    #[error(transparent)]
     CrontabChanged(#[from] init::cron::teardown::CrontabChanged),
-    #[error("Could not set crontab, needed to add our lines, error: {0}")]
-    SetCrontab(#[from] init::cron::SetCrontabError),
-    #[error("Something went wrong interacting with systemd: {0}")]
-    Systemd(#[from] init::systemd::Error),
-    #[error("Could not copy executable: {0}")]
-    CopyExe(std::io::Error),
-    #[error("Could not set the owner of the installed executable to be root: {0}")]
-    SetRootOwner(std::io::Error),
-    #[error("Could not make the installed executable read only: {0}")]
-    SetReadOnly(#[from] files::SetReadOnlyError),
+    #[error("Could not set crontab, needed to add our lines")]
+    SetCrontab(#[from] #[source] init::cron::SetCrontabError),
+    #[error("Something went wrong interacting with systemd")]
+    Systemd(#[from] #[source] init::systemd::Error),
+    #[error("Could not copy executable")]
+    CopyExe(#[source] std::io::Error),
+    #[error("Could not set the owner of the installed executable to be root")]
+    SetRootOwner(#[source] std::io::Error),
+    #[error("Could not make the installed executable read only")]
+    SetReadOnly(#[from] #[source] files::SetReadOnlyError),
     #[error("Can not disable Cron service, process will not stop.")]
     CouldNotStop,
 }
@@ -160,16 +160,16 @@ impl Display for &dyn InstallStep {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RemoveError {
-    #[error("Could not get crontab, needed tot filter out our added lines, error: {0}")]
-    GetCrontab(#[from] init::cron::GetCrontabError),
-    #[error("{0}")]
+    #[error("Could not get crontab, needed tot filter out our added lines")]
+    GetCrontab(#[from] #[source] init::cron::GetCrontabError),
+    #[error(transparent)]
     CrontabChanged(#[from] init::cron::teardown::CrontabChanged),
-    #[error("Could not set crontab, needed tot filter out our added lines, error: {0}")]
-    SetCrontab(#[from] init::cron::SetCrontabError),
-    #[error("Could not remove file(s), error: {0}")]
-    DeleteError(#[from] files::DeleteError),
-    #[error("Something went wrong interacting with systemd: {0}")]
-    Systemd(#[from] init::systemd::Error),
+    #[error("Could not set crontab, needed tot filter out our added lines")]
+    SetCrontab(#[from] #[source] init::cron::SetCrontabError),
+    #[error("Could not remove file(s), error")]
+    DeleteError(#[from] #[source] files::DeleteError),
+    #[error("Something went wrong interacting with systemd")]
+    Systemd(#[from] #[source] init::systemd::Error),
 }
 
 /// One step in the remove process. Can be executed or described.
@@ -209,20 +209,20 @@ impl Display for &dyn RemoveStep {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RollbackError {
-    #[error("Could not rollback, error: {0}")]
-    Removing(#[from] RemoveError),
-    #[error("Could not rollback, error restoring file permissions: {0}")]
-    RestoringPermissions(std::io::Error),
-    #[error("Could not rollback, error re-enabling service: {0}")]
-    ReEnabling(#[from] SystemCtlError),
+    #[error("Could not rollback, error")]
+    Removing(#[from] #[source] RemoveError),
+    #[error("Could not rollback, error restoring file permissions")]
+    RestoringPermissions(#[source] std::io::Error),
+    #[error("Could not rollback, error re-enabling service")]
+    ReEnabling(#[from] #[source] SystemCtlError),
     #[error("Can not rollback setting up cron, must be done manually")]
     Impossible,
     #[error("Crontab changed undoing changes might overwrite the change")]
-    CrontabChanged(#[from] CrontabChanged),
-    #[error("Could not get the crontab, needed to undo a change to it: {0}")]
-    GetCrontab(#[from] GetCrontabError),
-    #[error("Could not revert to the original crontab: {0}")]
-    SetCrontab(#[from] SetCrontabError),
+    CrontabChanged(#[from] #[source] CrontabChanged),
+    #[error("Could not get the crontab, needed to undo a change to it")]
+    GetCrontab(#[from] #[source] GetCrontabError),
+    #[error("Could not revert to the original crontab")]
+    SetCrontab(#[from] #[source] SetCrontabError),
 }
 
 /// Undoes a [`InstallStep`]. Can be executed or described.

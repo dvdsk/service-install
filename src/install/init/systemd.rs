@@ -44,16 +44,16 @@ pub enum SystemCtlError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("Could not configure systemd: {0}")]
-    SystemCtl(#[from] SystemCtlError),
-    #[error("Could not write out unit file to {path}, error: {e}")]
-    Writing { e: io::Error, path: PathBuf },
+    #[error("Could not configure systemd")]
+    SystemCtl(#[from] #[source] SystemCtlError),
+    #[error("Could not write out unit file to {path}")]
+    Writing { #[source] e: io::Error, path: PathBuf },
     #[error("Could not remove the unit files, error: {0}")]
-    Removing(io::Error),
-    #[error("Could not verify unit files where created by us, could not open them, error: {0}")]
-    Verifying(#[from] unit::Error),
-    #[error("Could not check if this system uses systemd, err: {0}")]
-    CheckingInitSys(#[from] PathCheckError),
+    Removing(#[source] io::Error),
+    #[error("Could not verify unit files where created by us, could not open them")]
+    Verifying(#[from] #[source] unit::Error),
+    #[error("Could not check if this system uses systemd")]
+    CheckingInitSys(#[from] #[source] PathCheckError),
 }
 
 pub(crate) fn path_is_systemd(path: &Path) -> Result<bool, PathCheckError> {

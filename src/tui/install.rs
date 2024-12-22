@@ -11,14 +11,14 @@ use dialoguer::Select;
 pub enum Error {
     #[error("canceled by the user")]
     Canceled,
-    #[error("could not get input from the user: {0}")]
-    UserInputFailed(#[from] dialoguer::Error),
+    #[error("could not get input from the user")]
+    UserInputFailed(#[from] #[source] dialoguer::Error),
     #[error("ran into one or more errors and user chose to abort, errors: {0:#?}")]
     AbortedAfterError(Vec<InstallError>),
-    #[error("user chose to cancel and rollback however rollback failed: {0}")]
-    RollbackFollowingCancel(RollbackError),
-    #[error("ran into error user chose to abort and rollback however rollback failed: {0}")]
-    RollbackFollowingError(RollbackError),
+    #[error("user chose to cancel and rollback however rollback failed")]
+    RollbackFollowingCancel(#[source] RollbackError),
+    #[error("ran into error user chose to abort and rollback however rollback failed")]
+    RollbackFollowingError(#[source] RollbackError),
 }
 
 /// Start an interactive installation wizard using the provided [install

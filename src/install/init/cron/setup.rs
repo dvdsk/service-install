@@ -17,16 +17,16 @@ use super::{current_crontab, set_crontab};
 pub enum Error {
     #[error("Command `crontab -l` failed, stderr:\n\t{stderr}")]
     ListFailed { stderr: String },
-    #[error("Could not get the current crontab: {0}")]
-    GetCrontab(super::GetCrontabError),
+    #[error("Could not get the current crontab")]
+    GetCrontab(#[source] super::GetCrontabError),
     #[error("Comment for previous install at the end of the crontab")]
     CrontabCorrupt,
     #[error("Failed to open crontab stdin")]
     StdinClosed,
-    #[error("Error while writing to crontab's stdin: {0}")]
-    WritingStdin(std::io::Error),
-    #[error("Could not wait on output of crontab program, err: {0}")]
-    FailedToWait(std::io::Error),
+    #[error("Error while writing to crontab's stdin")]
+    WritingStdin(#[source] std::io::Error),
+    #[error("Could not wait on output of crontab program")]
+    FailedToWait(#[source] std::io::Error),
     #[error("Crontab was modified while installation ran, you should manually verify it")]
     CrontabChanged,
     #[error("Could not find an existing install in crontab")]

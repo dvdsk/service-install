@@ -92,8 +92,8 @@ fn crontab_lines(text: &str) -> Vec<Line> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum GetCrontabError {
-    #[error("Could not run the crontab program: {0}")]
-    CouldNotRun(std::io::Error),
+    #[error("Could not run the crontab program")]
+    CouldNotRun(#[source] std::io::Error),
     #[error("Command `crontab -l` failed, stderr: \"{stderr}\"\n\t")]
     CommandFailed { stderr: String },
 }
@@ -128,16 +128,16 @@ fn current_crontab(user: Option<&str>) -> Result<Vec<Line>, GetCrontabError> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum SetCrontabError {
-    #[error("Could not run the crontab program: {0}")]
-    CouldNotRun(std::io::Error),
+    #[error("Could not run the crontab program")]
+    CouldNotRun(#[source] std::io::Error),
     #[error("Command `crontab -` failed, stderr:\n\t{stderr}")]
     CommandFailed { stderr: String },
     #[error("Failed to open crontab stdin")]
     StdinClosed,
-    #[error("Error while writing to crontab's stdin: {0}")]
-    WritingStdin(std::io::Error),
-    #[error("Could not wait on output of crontab program, err: {0}")]
-    FailedToWait(std::io::Error),
+    #[error("Error while writing to crontab's stdin")]
+    WritingStdin(#[source] std::io::Error),
+    #[error("Could not wait on output of crontab program")]
+    FailedToWait(#[source] std::io::Error),
 }
 
 fn set_crontab(new_crontab: &str, user: Option<&str>) -> Result<(), SetCrontabError> {

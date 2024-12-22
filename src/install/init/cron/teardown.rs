@@ -14,11 +14,11 @@ use super::{current_crontab, set_crontab, GetCrontabError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Could not get the current crontab: {0}")]
-    GetCrontab(#[from] GetCrontabError),
+    #[error("Could not get the current crontab")]
+    GetCrontab(#[from] #[source] GetCrontabError),
     #[error("Comment for previous install at the end of the crontab")]
     CrontabCorrupt,
-    #[error("{0}")]
+    #[error(transparent)]
     CrontabChanged(#[from] CrontabChanged),
     #[error("Rule in crontab corrupt, too short")]
     CorruptTooShort,

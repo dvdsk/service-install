@@ -14,8 +14,8 @@ pub(crate) struct Unit {
 /// uninstall.
 #[derive(Debug, thiserror::Error)]
 pub enum FindExeError {
-    #[error("Could not read systemd unit file at: {path}, error: {err}")]
-    ReadingUnit { err: std::io::Error, path: PathBuf },
+    #[error("Could not read systemd unit file at: {path}")]
+    ReadingUnit { #[source] err: std::io::Error, path: PathBuf },
     #[error("ExecStart (use to find binary) is missing from servic unit at: {0}")]
     ExecLineMissing(PathBuf),
     #[error("Path to binary extracted from systemd unit does not lead to a file, path: {0}")]
@@ -27,7 +27,7 @@ pub enum Error {
     #[error("File has no file name, can not be a systemd unit")]
     NoName,
     #[error("Could not read unit's content: {0}")]
-    FailedToRead(#[from] std::io::Error),
+    FailedToRead(#[from] #[source] std::io::Error),
 }
 
 impl Unit {

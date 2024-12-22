@@ -18,21 +18,21 @@ mod process_parent;
 #[derive(thiserror::Error, Debug)]
 pub enum MoveError {
     #[error("could not find current users home dir")]
-    NoHome(#[from] NoHomeError),
+    NoHome(#[from] #[source] NoHomeError),
     #[error("none of the usual dirs for user binaries exist")]
     UserDirNotAvailable,
     #[error("none of the usual dirs for system binaries exist")]
     SystemDirNotAvailable,
     #[error("the path did not point to a binary")]
     SourceNotFile,
-    #[error("could not move binary to install location: {0}")]
-    IO(std::io::Error),
+    #[error("could not move binary to install location")]
+    IO(#[source] std::io::Error),
     #[error("overwrite is not set and there is already a file named {name} at {}", dir.display())]
     TargetExists { name: String, dir: PathBuf },
     #[error("{0}")]
-    TargetInUse(#[from] TargetInUseError),
+    TargetInUse(#[from] #[source] TargetInUseError),
     #[error("could not check if already existing file is read only")]
-    CheckExistingFilePermissions(std::io::Error),
+    CheckExistingFilePermissions(#[source] std::io::Error),
 }
 
 fn system_dir() -> Option<PathBuf> {
@@ -139,10 +139,10 @@ impl InstallStep for SetRootOwner {
 
 #[derive(Debug, thiserror::Error)]
 pub enum SetReadOnlyError {
-    #[error("Could not get current permissions for file, error: {0}")]
-    GetPermissions(std::io::Error),
-    #[error("Could not set permissions for file, error: {0}")]
-    SetPermissions(std::io::Error),
+    #[error("Could not get current permissions for file")]
+    GetPermissions(#[source] std::io::Error),
+    #[error("Could not set permissions for file")]
+    SetPermissions(#[source] std::io::Error),
 }
 
 struct MakeReadExecOnly {
@@ -308,16 +308,16 @@ impl InstallStep for MakeRemovable {
 #[derive(Debug, thiserror::Error)]
 pub enum TargetInUseError {
     NoParent,
-    ResolvePath(#[from] PathCheckError),
+    ResolvePath(#[from] #[source] PathCheckError),
     Parents(Vec<PathBuf>),
-    CouldNotDisable(#[from] DisableError),
+    CouldNotDisable(#[from] #[source] DisableError),
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum DisableError {
-    #[error("{0}")]
+    #[error(transparent)]
     SystemD(#[from] init::systemd::DisableError),
-    #[error("{0}")]
+    #[error(transparent)]
     Cron(#[from] init::cron::disable::Error),
 }
 
@@ -369,17 +369,17 @@ fn disable_if_running(
 #[derive(thiserror::Error, Debug)]
 pub enum DeleteError {
     #[error("could not find current users home dir")]
-    NoHome(#[from] NoHomeError),
+    NoHome(#[from] #[source] NoHomeError),
     #[error("none of the usual dirs for user binaries exist")]
     UserDirNotAvailable,
     #[error("none of the usual dirs for system binaries exist")]
     SystemDirNotAvailable,
     #[error("the path did not point to a binary")]
     SourceNotFile,
-    #[error("could not move binary to install location, error: {0}")]
-    IO(std::io::Error),
-    #[error("Could not get the current executable's location, error: {0}")]
-    GetExeLocation(std::io::Error),
+    #[error("could not move binary to install location")]
+    IO(#[source] std::io::Error),
+    #[error("Could not get the current executable's location")]
+    GetExeLocation(#[source] std::io::Error),
     #[error("May only uninstall the currently running binary, running: {running} installed: {installed}")]
     ExeNotInstalled {
         running: PathBuf,

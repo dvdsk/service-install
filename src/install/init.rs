@@ -89,26 +89,26 @@ pub struct PathCheckError(std::io::Error);
 
 #[derive(thiserror::Error, Debug)]
 pub enum SetupError {
-    #[error("systemd specific error: {0}")]
-    Systemd(#[from] systemd::Error),
-    #[error("Error while setting up crontab rule: {0}")]
-    Cron(#[from] cron::setup::Error),
+    #[error("systemd specific error")]
+    Systemd(#[from] #[source] systemd::Error),
+    #[error("Error while setting up crontab rule")]
+    Cron(#[from] #[source] cron::setup::Error),
     #[error("could not find current users home dir")]
     NoHome(#[from] NoHomeError),
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum TearDownError {
-    #[error("Cron specific error: {0}")]
-    Cron(#[from] cron::teardown::Error),
-    #[error("Error while setting up systemd service: {0}")]
-    Systemd(#[from] systemd::Error),
+    #[error("Cron specific error")]
+    Cron(#[from] #[source] cron::teardown::Error),
+    #[error("Error while setting up systemd service")]
+    Systemd(#[from] #[source] systemd::Error),
     #[error("Could not find current users home dir")]
-    NoHome(#[from] NoHomeError),
+    NoHome(#[from] #[source] NoHomeError),
     #[error("No service file while there is a timer file")]
     TimerWithoutService,
-    #[error("Could not find path to executable: {0}")]
-    FindingExePath(#[from] FindExeError),
+    #[error("Could not find path to executable")]
+    FindingExePath(#[from] #[source] FindExeError),
 }
 
 #[derive(Debug, Clone)]

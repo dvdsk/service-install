@@ -119,10 +119,10 @@ impl InstallStep for Disable {
 
 #[derive(Debug, thiserror::Error)]
 pub enum DisableError {
-    #[error("Could not find the service: {0}")]
-    CouldNotFindIt(#[from] FindError),
-    #[error("Could not open systemd unit: {0}")]
-    CouldNotReadUnit(#[from] unit::Error),
+    #[error("Could not find the service")]
+    CouldNotFindIt(#[from] #[source] FindError),
+    #[error("Could not open systemd unit")]
+    CouldNotReadUnit(#[from] #[source] unit::Error),
     #[error("Could not find the service or (timer) that keeps the file in use")]
     NoServiceOrTimerFound,
 }
@@ -195,7 +195,7 @@ pub enum FindError {
     )]
     NotFoundWithErrors(Vec<FindExeError>),
     #[error("Could not read directory")]
-    CouldNotReadDir(#[from] std::io::Error),
+    CouldNotReadDir(#[from] #[source] std::io::Error),
 }
 
 fn walk_dir(dir: &Path, process_file: &mut impl FnMut(&Path)) -> io::Result<()> {

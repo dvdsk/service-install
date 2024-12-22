@@ -26,7 +26,7 @@ use super::GetCrontabError;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Could not get the current crontab")]
-    GetCrontab(GetCrontabError),
+    GetCrontab(#[source] GetCrontabError),
     #[error("Failed to find a rule starting the target")]
     NoRuleFound,
     #[error("Process spawnedby cron will not stop")]
