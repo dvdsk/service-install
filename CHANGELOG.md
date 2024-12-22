@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-# Version 0.5.1 (2024-12-20)
-### Changed
-- Allow removal without having the service name set
-
 # Version 0.5.0 (2024-12-20)
 ### Changed
 - Install spec builder's `name` member renamed to `service_name` to highlight
