@@ -54,9 +54,17 @@ impl Display for Mode {
 #[derive(thiserror::Error, Debug)]
 pub enum PrepareInstallError {
     #[error("Error setting up init")]
-    Init(#[from] #[source] init::SetupError),
+    Init(
+        #[from]
+        #[source]
+        init::SetupError,
+    ),
     #[error("Failed to move files")]
-    Move(#[from] #[source] files::MoveError),
+    Move(
+        #[from]
+        #[source]
+        files::MoveError,
+    ),
     #[error("Need to run as root to install to system")]
     NeedRootForSysInstall,
     #[error("Need to run as root to setup service to run as another user")]
@@ -90,9 +98,17 @@ pub enum PrepareRemoveError {
     #[error("Could not find this executable's location")]
     GetExeLocation(#[source] std::io::Error),
     #[error("Failed to remove files")]
-    Move(#[from] #[source] files::DeleteError),
+    Move(
+        #[from]
+        #[source]
+        files::DeleteError,
+    ),
     #[error("Removing from init system")]
-    Init(#[from] #[source] init::TearDownError),
+    Init(
+        #[from]
+        #[source]
+        init::TearDownError,
+    ),
     #[error("Could not find any installation in any init system")]
     NoInstallFound,
     #[error("Need to run as root to remove a system install")]
@@ -103,19 +119,35 @@ pub enum PrepareRemoveError {
 #[derive(Debug, thiserror::Error)]
 pub enum InstallError {
     #[error("Could not get crontab, needed to add our lines")]
-    GetCrontab(#[from] #[source] init::cron::GetCrontabError),
+    GetCrontab(
+        #[from]
+        #[source]
+        init::cron::GetCrontabError,
+    ),
     #[error(transparent)]
     CrontabChanged(#[from] init::cron::teardown::CrontabChanged),
     #[error("Could not set crontab, needed to add our lines")]
-    SetCrontab(#[from] #[source] init::cron::SetCrontabError),
+    SetCrontab(
+        #[from]
+        #[source]
+        init::cron::SetCrontabError,
+    ),
     #[error("Something went wrong interacting with systemd")]
-    Systemd(#[from] #[source] init::systemd::Error),
+    Systemd(
+        #[from]
+        #[source]
+        init::systemd::Error,
+    ),
     #[error("Could not copy executable")]
     CopyExe(#[source] std::io::Error),
     #[error("Could not set the owner of the installed executable to be root")]
     SetRootOwner(#[source] std::io::Error),
     #[error("Could not make the installed executable read only")]
-    SetReadOnly(#[from] #[source] files::SetReadOnlyError),
+    SetReadOnly(
+        #[from]
+        #[source]
+        files::SetReadOnlyError,
+    ),
     #[error("Can not disable Cron service, process will not stop.")]
     CouldNotStop,
 }
@@ -161,23 +193,40 @@ impl Display for &dyn InstallStep {
 #[derive(Debug, thiserror::Error)]
 pub enum RemoveError {
     #[error("Could not get crontab, needed tot filter out our added lines")]
-    GetCrontab(#[from] #[source] init::cron::GetCrontabError),
+    GetCrontab(
+        #[from]
+        #[source]
+        init::cron::GetCrontabError,
+    ),
     #[error(transparent)]
     CrontabChanged(#[from] init::cron::teardown::CrontabChanged),
     #[error("Could not set crontab, needed tot filter out our added lines")]
-    SetCrontab(#[from] #[source] init::cron::SetCrontabError),
+    SetCrontab(
+        #[from]
+        #[source]
+        init::cron::SetCrontabError,
+    ),
     #[error("Could not remove file(s), error")]
-    DeleteError(#[from] #[source] files::DeleteError),
+    DeleteError(
+        #[from]
+        #[source]
+        files::DeleteError,
+    ),
     #[error("Something went wrong interacting with systemd")]
-    Systemd(#[from] #[source] init::systemd::Error),
+    Systemd(
+        #[from]
+        #[source]
+        init::systemd::Error,
+    ),
 }
 
 /// One step in the remove process. Can be executed or described.
 pub trait RemoveStep {
-    /// A short (one line) description of what this performing this step will
-    /// do. Pass in the tense you want for the description (past, present or future)
+    /// A short (one line) description of what this step will do to the
+    /// system. Pass in the tense you want for the description (past, present
+    /// or future)
     fn describe(&self, tense: Tense) -> String;
-    /// A verbose description of what performing this step will do to the
+    /// A verbose description of what this step will do to the
     /// system. Includes as many details as possible. Pass in the tense you want
     /// for the description (past, present or future)
     fn describe_detailed(&self, tense: Tense) -> String {
@@ -210,19 +259,39 @@ impl Display for &dyn RemoveStep {
 #[derive(Debug, thiserror::Error)]
 pub enum RollbackError {
     #[error("Could not rollback, error")]
-    Removing(#[from] #[source] RemoveError),
+    Removing(
+        #[from]
+        #[source]
+        RemoveError,
+    ),
     #[error("Could not rollback, error restoring file permissions")]
     RestoringPermissions(#[source] std::io::Error),
     #[error("Could not rollback, error re-enabling service")]
-    ReEnabling(#[from] #[source] SystemCtlError),
+    ReEnabling(
+        #[from]
+        #[source]
+        SystemCtlError,
+    ),
     #[error("Can not rollback setting up cron, must be done manually")]
     Impossible,
     #[error("Crontab changed undoing changes might overwrite the change")]
-    CrontabChanged(#[from] #[source] CrontabChanged),
+    CrontabChanged(
+        #[from]
+        #[source]
+        CrontabChanged,
+    ),
     #[error("Could not get the crontab, needed to undo a change to it")]
-    GetCrontab(#[from] #[source] GetCrontabError),
+    GetCrontab(
+        #[from]
+        #[source]
+        GetCrontabError,
+    ),
     #[error("Could not revert to the original crontab")]
-    SetCrontab(#[from] #[source] SetCrontabError),
+    SetCrontab(
+        #[from]
+        #[source]
+        SetCrontabError,
+    ),
 }
 
 /// Undoes a [`InstallStep`]. Can be executed or described.
@@ -531,14 +600,10 @@ impl<M: ToAssign, P: ToAssign, T: ToAssign, I: ToAssign> Spec<M, P, T, I> {
     pub fn prepare_remove(self) -> Result<RemoveSteps, PrepareRemoveError> {
         let builder::Spec {
             mode,
-            service_name: Some(name),
             bin_name,
             run_as,
             ..
-        } = self
-        else {
-            unreachable!("type sys guarantees name and trigger set")
-        };
+        } = self;
 
         if let Mode::System = mode {
             if let sudo::RunningAs::User = sudo::check() {
@@ -552,7 +617,7 @@ impl<M: ToAssign, P: ToAssign, T: ToAssign, I: ToAssign> Spec<M, P, T, I> {
                 return Err(PrepareRemoveError::NoInstallFound);
             };
 
-            if let Some(install) = init.tear_down_steps(&name, bin_name, mode, run_as.as_deref())? {
+            if let Some(install) = init.tear_down_steps(bin_name, mode, run_as.as_deref())? {
                 break install;
             }
         };

@@ -158,16 +158,23 @@ impl InstallStep for EnableService {
     }
 }
 
+fn with_added_extension(path: &Path, extension: &str) -> PathBuf {
+    let mut path = path.as_os_str().to_os_string();
+    path.push(".");
+    path.push(extension);
+    PathBuf::from(path)
+}
+
 pub(crate) fn with_timer(
     path_without_extension: &Path,
     params: &Params,
     schedule: &Schedule,
 ) -> Steps {
     let unit = render_service(params);
-    let path = path_without_extension.with_extension("service");
+    let path = with_added_extension(path_without_extension, "service");
     let create_service = Box::new(Service { unit, path });
     let unit = render_timer(params, schedule);
-    let path = path_without_extension.with_extension("timer");
+    let path = with_added_extension(path_without_extension, "timer");
     let create_timer = Box::new(Timer { unit, path });
     let enable = Box::new(EnableTimer {
         name: params.name.clone(),
@@ -179,7 +186,7 @@ pub(crate) fn with_timer(
 
 pub(crate) fn without_timer(path_without_extension: &Path, params: &Params) -> Steps {
     let unit = render_service(params);
-    let path = path_without_extension.with_extension("service");
+    let path = with_added_extension(path_without_extension, "service");
     let create_service = Box::new(Service { unit, path });
 
     let enable = Box::new(EnableService {

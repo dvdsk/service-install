@@ -60,13 +60,12 @@ impl System {
     }
     pub(crate) fn tear_down_steps(
         &self,
-        name: &str,
         bin_name: &str,
         mode: Mode,
         user: Option<&str>,
     ) -> Result<Option<(RSteps, ExeLocation)>, TearDownError> {
         match self {
-            System::Systemd => systemd::tear_down_steps(name, mode),
+            System::Systemd => systemd::tear_down_steps(mode),
             System::Cron => cron::tear_down_steps(bin_name, mode, user),
         }
     }
@@ -90,9 +89,17 @@ pub struct PathCheckError(std::io::Error);
 #[derive(thiserror::Error, Debug)]
 pub enum SetupError {
     #[error("systemd specific error")]
-    Systemd(#[from] #[source] systemd::Error),
+    Systemd(
+        #[from]
+        #[source]
+        systemd::Error,
+    ),
     #[error("Error while setting up crontab rule")]
-    Cron(#[from] #[source] cron::setup::Error),
+    Cron(
+        #[from]
+        #[source]
+        cron::setup::Error,
+    ),
     #[error("could not find current users home dir")]
     NoHome(#[from] NoHomeError),
 }
@@ -100,15 +107,35 @@ pub enum SetupError {
 #[derive(thiserror::Error, Debug)]
 pub enum TearDownError {
     #[error("Cron specific error")]
-    Cron(#[from] #[source] cron::teardown::Error),
+    Cron(
+        #[from]
+        #[source]
+        cron::teardown::Error,
+    ),
     #[error("Error while setting up systemd service")]
-    Systemd(#[from] #[source] systemd::Error),
+    Systemd(
+        #[from]
+        #[source]
+        systemd::Error,
+    ),
     #[error("Could not find current users home dir")]
-    NoHome(#[from] #[source] NoHomeError),
+    NoHome(
+        #[from]
+        #[source]
+        NoHomeError,
+    ),
     #[error("No service file while there is a timer file")]
     TimerWithoutService,
     #[error("Could not find path to executable")]
-    FindingExePath(#[from] #[source] FindExeError),
+    FindingExePath(
+        #[from]
+        #[source]
+        FindExeError,
+    ),
+    #[error(
+        "Found multiple different paths in services, do not know which to remove, paths: {0:?}"
+    )]
+    MultipleExePaths(Vec<PathBuf>),
 }
 
 #[derive(Debug, Clone)]

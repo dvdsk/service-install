@@ -38,8 +38,8 @@ pub enum Error {
 ///
 /// In that last case either [`AbortedAfterError`](Error::AbortedAfterError),
 /// [`RollbackFollowingError`](Error::RollbackFollowingError) or
-/// [`RollbackFollowingCancel`](Error::RollbackFollowingCancel) is returned
-/// depending on whether: the user aborted after the error, a rollback failed
+/// [`RollbackFollowingCancel`](Error::RollbackFollowingCancel) is returned.
+/// Which depends on whether: the user aborted after the error, a rollback failed
 /// was started after an install error but the rollback failed *or* happened
 /// during install or a rollback was started after the user canceled but it
 /// failed.
@@ -61,7 +61,7 @@ pub fn start(steps: InstallSteps, detailed: bool) -> Result<(), Error> {
             Ok(None) => (),
             Ok(Some(rollback)) => rollback_steps.push_front(rollback),
             Err(e) => {
-                let details = e.to_string().replace('\n', "\n\t");
+                let details = format_error_chain(&e).replace('\n', "\n\t");
                 errors.push(e);
 
                 println!("An error occurred, details:\n\t{details}\t");
@@ -103,4 +103,35 @@ fn rollback(mut rollback_steps: VecDeque<Box<dyn RollbackStep>>) -> Result<(), R
         println!("{did}");
     }
     Ok(())
+}
+
+fn format_error_chain(root: &dyn std::error::Error) -> String {
+    let mut res = format!("1 {root}\n");
+
+    let mut i = 2;
+    let mut curr = root;
+    while let Some(next) = curr.source() {
+        res.push_str(&format!("{i} {next}\n"));
+        curr = next;
+        i += 1;
+    }
+
+    res
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::install::init::systemd::{Error, SystemCtlError};
+    use crate::install::RemoveError;
+
+    use super::*;
+
+    #[test]
+    fn test_error_chain_format() {
+        let error = RemoveError::Systemd(Error::SystemCtl(SystemCtlError::Io(
+            std::io::Error::new(std::io::ErrorKind::Other, "test"),
+        )));
+
+        assert_eq!(format_error_chain(&error), "");
+    }
 }
