@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## Version 0.5.3 - 2024-12-23
+
 ### Changed
 - no longer formatting source of error in an error's display implementation.
   Instead relying on `std::error::Error::source`. Use color-eyre/anyhow to
@@ -14,48 +17,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - rollback was performed in the wrong order
 - `prepare_remove` no longer crashes when service name was not provided
 
-# Version 0.5.2 (2024-12-22)
+## Version 0.5.2 - 2024-12-22
 ### Fixed
 - `prepare_remove` was broken in 0.5.0
 
-# Version 0.5.1 (2024-12-22)
+## Version 0.5.1 - 2024-12-22
 YANKED (bad release)
 
-# Version 0.5.0 (2024-12-20)
+## Version 0.5.0 - 2024-12-20
 ### Changed
 - Install spec builder's `name` member renamed to `service_name` to highlight
   that it sets the name for the con job or systemd service and not the
   executable that is installed
 
-# Version 0.4.4 (2024-12-20)
+## Version 0.4.4 - 2024-12-20
 ### Changed
 - Made error returned by install and removal implement Send+Sync+'static. This makes it easily to use with error crates such as eyre and anyhow
 
-# Version 0.4.3 (2024-04-21)
+## Version 0.4.3 - 2024-04-21
 
 ### Fixed
 - Make the executable readable and executable but remove all others if readonly
   is set
 
-# Version 0.4.2 (2024-04-21)
+## Version 0.4.2 - 2024-04-21
 
 ### Changed
 - When overwrite is enabled and a file taking up the install location is being
   ran by a service the service is stopped and disabled. If the service was
   created by us previously it is removed too.
 
-# Version 0.4.1 (2024-04-15)
+## Version 0.4.1 - 2024-04-15
 
 ### Fixed
 - All errors now print the underlying issue when it is known
 
-# Version 0.4.0 (2024-04-11)
+## Version 0.4.0 - 2024-04-11
 
 ### Added
 - New `overwrite_exiting` option on `install::Spec`. Default is false, by
   setting it to true the installer will overwrite existing executables.
 
-# Version 0.3.0 (2024-4-9)
+## Version 0.3.0 - 2024-04-9
 
 ### Changed
 - Tense Question is now called Active
@@ -65,7 +68,7 @@ YANKED (bad release)
 - Added `best_effort_remove` function. A version of `remove` that continues on
   errors and returns what failed and the why (the error).
 
-# Version 0.2.0 (2024-4-2)
+## Version 0.2.0 - 2024-04-2
 
 ### Changed
 - Tense now also has the option Question which will turn the step descriptions
