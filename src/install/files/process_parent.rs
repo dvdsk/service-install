@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use itertools::Itertools;
 use sysinfo::Pid;
@@ -16,6 +17,7 @@ pub(crate) enum IdRes {
     },
     ParentNotInit {
         parents: Vec<PathBuf>,
+        pid: Pid,
     },
 }
 
@@ -25,22 +27,21 @@ impl IdRes {
         pid: Pid,
         init_systems: &[init::System],
     ) -> Result<IdRes, PathCheckError> {
-        if tree.is_empty() {
+        let Some(direct_parent) = tree.first() else {
             return Ok(IdRes::NoParent);
-        }
+        };
 
-        for parent in &tree {
-            for init in init_systems {
-                if init.is_init_path(parent)? {
-                    return Ok(IdRes::ParentIsInit {
-                        init: init.clone(),
-                        pid,
-                    });
-                }
+        for init in init_systems {
+            if init.is_init_path(direct_parent)? {
+                return Ok(IdRes::ParentIsInit {
+                    init: init.clone(),
+                    pid,
+                });
             }
         }
 
         Ok(IdRes::ParentNotInit {
+            pid,
             parents: tree.into_iter().map(PathBuf::from).collect(),
         })
     }
@@ -98,17 +99,37 @@ pub(crate) fn list(
         .collect()
 }
 
-struct NotifyStep {
+#[derive(Debug, thiserror::Error)]
+pub enum KillOldError {
+    #[error("Could not run the kill command")]
+    KillUnavailable(#[source] std::io::Error),
+    #[error("The kill command faild with: {0}")]
+    KillFailed(String),
+}
+
+pub struct KillOld {
+    pid: Pid,
     parents: Vec<PathBuf>,
 }
 
-impl InstallStep for NotifyStep {
+impl InstallStep for KillOld {
     fn describe(&self, tense: crate::Tense) -> String {
         match tense {
-            crate::Tense::Past => "the executable replaced was running",
-            crate::Tense::Questioning => "the executable is running",
-            crate::Tense::Active | crate::Tense::Future => {
-                "the to be replaced executable is running"
+            crate::Tense::Past => {
+                "there was a program running with the same name taking up the \
+                    install location it has been terminated"
+            }
+            crate::Tense::Questioning => {
+                "there is a program running with the same name taking up the \
+                    install location terminate it?"
+            }
+            crate::Tense::Active => {
+                "there is a program running with the same name taking up the \
+                    install location, terminating it"
+            }
+            crate::Tense::Future => {
+                "there is a program running with the same name taking up the \
+                    install location, it will be terminated"
             }
         }
         .to_string()
@@ -117,18 +138,25 @@ impl InstallStep for NotifyStep {
     fn perform(
         &mut self,
     ) -> Result<Option<Box<dyn crate::install::RollbackStep>>, crate::install::InstallError> {
-        Ok(None)
+        let output = Command::new("kill")
+            .arg("--signal")
+            .arg("TERM")
+            .arg(format!("{}", self.pid))
+            .output()
+            .map_err(KillOldError::KillUnavailable)
+            .map_err(crate::install::InstallError::KillOld)?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            Err(crate::install::InstallError::KillOld(
+                KillOldError::KillFailed(stderr),
+            ))
+        } else {
+            Ok(None)
+        }
     }
 
     fn describe_detailed(&self, tense: crate::Tense) -> String {
-        let start = match tense {
-            crate::Tense::Past => "the executable replaced was running",
-            crate::Tense::Questioning => "the executable is running",
-            crate::Tense::Active | crate::Tense::Future => {
-                "the to be replaced executable is running"
-            }
-        };
-
         let list = if self.parents.len() == 1 {
             self.parents
                 .first()
@@ -139,12 +167,39 @@ impl InstallStep for NotifyStep {
             self.parents
                 .iter()
                 .map(|p| p.display().to_string())
-                .join("\n\t-")
+                .join("\n\twhich was started by: ")
         };
-        format!("{start}, it was started by {list}")
+
+        match tense {
+            crate::Tense::Past => format!(
+                "there was a program running with the same name taking up the \
+            install location. It was was started by: {list}\nIt had to be terminated \
+            before we could continue."
+            ),
+            crate::Tense::Questioning => format!(
+                "there is a program running with the same name taking up the \
+            install location. It was was started by: {list}\nIt must be terminated \
+            before we can continue. Terminating might not work or the parent \
+            can restart the program. Do you wish to try to stop the program and \
+            continue installation?"
+            ),
+            crate::Tense::Active => format!(
+                "there is a program running with the same name taking up the \
+            install location. It was was started by: {list}\nIt must be terminated \
+            before we can continue. Terminating might not work or the parent \
+            can restart the program. Stopping the program and continuing installation"
+            ),
+            crate::Tense::Future => format!(
+                "there is a program running with the same name taking up the \
+            install location. It was was started by: {list}\nIt must be terminated \
+            before we can continue. Terminating might not work or the parent \
+            can restart the program. Will try to stop the program and continuing \
+            installation"
+            ),
+        }
     }
 }
 
-pub(crate) fn notify_steps(parents: Vec<PathBuf>) -> Box<dyn InstallStep> {
-    Box::new(NotifyStep { parents })
+pub(crate) fn kill_old_steps(pid: Pid, parents: Vec<PathBuf>) -> Box<dyn InstallStep> {
+    Box::new(KillOld { pid, parents })
 }

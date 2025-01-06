@@ -150,6 +150,8 @@ pub enum InstallError {
     ),
     #[error("Can not disable Cron service, process will not stop.")]
     CouldNotStop,
+    #[error("Could not kill the process preventing installing the new binary")]
+    KillOld(#[source] files::process_parent::KillOldError),
 }
 
 /// One step in the install process. Can be executed or described.

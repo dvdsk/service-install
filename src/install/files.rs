@@ -13,7 +13,7 @@ use crate::install::RemoveStep;
 use super::init::PathCheckError;
 use super::{init, InstallError, InstallStep, Mode, RemoveError, RollbackStep, Tense};
 
-mod process_parent;
+pub mod process_parent;
 
 #[derive(thiserror::Error, Debug)]
 pub enum MoveError {
@@ -115,10 +115,13 @@ impl InstallStep for Move {
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
-        std::fs::copy(&self.source, &self.target).map_err(InstallError::CopyExe)?;
-        Ok(Some(Box::new(Remove {
-            target: self.target.clone(),
-        })))
+        if let Err(e) = std::fs::copy(&self.source, &self.target) {
+            Err(InstallError::CopyExe(e))
+        } else {
+            Ok(Some(Box::new(Remove {
+                target: self.target.clone(),
+            })))
+        }
     }
 }
 
@@ -383,7 +386,9 @@ fn disable_if_running(
                 steps.append(&mut init.disable_steps(target, pid, mode, run_as)?)
             }
             IdRes::NoParent => return Err(TargetInUseError::NoParent)?,
-            IdRes::ParentNotInit { parents } => steps.push(process_parent::notify_steps(parents)),
+            IdRes::ParentNotInit { parents, pid } => {
+                steps.push(process_parent::kill_old_steps(pid, parents))
+            }
         }
     }
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Version 0.5.4 - 2025-01-06
+### Added
+- Offers to stop running processes taking up the install location
+
 ## Version 0.5.3 - 2024-12-23
 
 ### Changed
