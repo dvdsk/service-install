@@ -119,19 +119,19 @@ impl InstallStep for KillOld {
         match tense {
             crate::Tense::Past => {
                 "there was a program running with the same name taking up the \
-                    install location it has been terminated"
+                    install location it has been terminated."
             }
             crate::Tense::Questioning => {
                 "there is a program running with the same name taking up the \
-                    install location terminate it"
+                    install location, terminate it?"
             }
             crate::Tense::Active => {
                 "there is a program running with the same name taking up the \
-                    install location, terminating it"
+                    install location, terminating it."
             }
             crate::Tense::Future => {
                 "there is a program running with the same name taking up the \
-                    install location, it will be terminated"
+                    install location, it will be terminated."
             }
         }
         .to_string()
@@ -176,27 +176,27 @@ impl InstallStep for KillOld {
             crate::Tense::Past => format!(
                 "there was a program running with the same name taking up the \
             install location. It was was started by: {list}\nIt had to be terminated \
-            before we could continue"
+            before we could continue."
             ),
             crate::Tense::Questioning => format!(
                 "there is a program running with the same name taking up the \
             install location. It was was started by: {list}\nIt must be terminated \
             before we can continue. Terminating might not work or the parent \
             can restart the program. Do you wish to try to stop the program and \
-            continue installation"
+            continue installation?"
             ),
             crate::Tense::Active => format!(
                 "there is a program running with the same name taking up the \
             install location. It was was started by: {list}\nIt must be terminated \
             before we can continue. Terminating might not work or the parent \
-            can restart the program. Stopping the program and continuing installation"
+            can restart the program. Stopping the program and continuing installation."
             ),
             crate::Tense::Future => format!(
                 "there is a program running with the same name taking up the \
             install location. It was was started by: {list}\nIt must be terminated \
             before we can continue. Terminating might not work or the parent \
             can restart the program. Will try to stop the program and continuing \
-            installation"
+            installation."
             ),
         }
     }

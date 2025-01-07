@@ -98,9 +98,12 @@ impl InstallStep for Add {
             Tense::Active => "Appending",
         };
         if let Some(run_as) = &self.user {
-            format!("{verb} comment and rule to {run_as}'s crontab")
+            format!(
+                "{verb} comment and rule to {run_as}'s crontab{}",
+                tense.punct()
+            )
         } else {
-            format!("{verb} comment and rule to crontab")
+            format!("{verb} comment and rule to crontab{}", tense.punct())
         }
     }
 
@@ -119,11 +122,11 @@ impl InstallStep for Add {
         let comment = comment.replace('\n', "\n|\t");
         if let Some(run_as) = user {
             format!(
-                "{verb} comment and rule to {run_as}'s crontab:\n| comment:\n|\t{comment}\n| rule:\n|\t{rule}"
+                "{verb} comment and rule to {run_as}'s crontab{}\n| comment:\n|\t{comment}\n| rule:\n|\t{rule}", tense.punct()
             )
         } else {
             format!(
-                "{verb} comment and rule to crontab:\n| comment:\n|\t{comment}\n| rule:\n|\t{rule}"
+                "{verb} comment and rule to crontab{}\n| comment:\n|\t{comment}\n| rule:\n|\t{rule}", tense.punct()
             )
         }
     }
@@ -166,7 +169,10 @@ impl InstallStep for RemovePrevious {
             .as_ref()
             .map(|n| format!("{n}'s "))
             .unwrap_or_default();
-        format!("{verb} comment and rule from previous installation from {user}crontab")
+        format!(
+            "{verb} comment and rule from previous installation from {user}crontab{}",
+            tense.punct()
+        )
     }
 
     fn describe_detailed(&self, tense: Tense) -> String {
@@ -188,7 +194,7 @@ impl InstallStep for RemovePrevious {
             .map(|Line { pos, text }| format!("\n|\t{pos}: {text}"))
             .collect();
         let rule = format!("|\t{}: {}", self.rule.pos, self.rule.text);
-        format!("{verb} a comment and rule from previous installation from {user}crontab:\n| comment:\t{comment}\n| rule:\n{rule}")
+        format!("{verb} a comment and rule from previous installation from {user}crontab{}\n| comment:\t{comment}\n| rule:\n{rule}", tense.punct())
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {

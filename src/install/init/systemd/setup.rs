@@ -29,7 +29,10 @@ impl InstallStep for Service {
             Tense::Active => "Writing",
         };
         let path = self.path.display();
-        format!("{verb} systemd service unit to:\n\t{path}")
+        format!(
+            "{verb} systemd service unit{}\n\t| path: {path}",
+            tense.punct()
+        )
     }
 
     fn describe_detailed(&self, tense: Tense) -> String {
@@ -41,7 +44,10 @@ impl InstallStep for Service {
         };
         let path = self.path.display();
         let content = self.unit.trim_end().replace('\n', "\n|\t");
-        format!("{verb} systemd service unit to:\n|\t{path}\n| content:\n|\t{content}")
+        format!(
+            "{verb} systemd service unit{}\n| path:\n|\t{path}\n| content:\n|\t{content}",
+            tense.punct()
+        )
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
@@ -69,7 +75,10 @@ impl InstallStep for Timer {
             Tense::Active => "Writing",
         };
         let path = self.path.display();
-        format!("{verb} systemd timer unit to:\n\t{path}")
+        format!(
+            "{verb} systemd timer unit{}\n\t| path: {path}",
+            tense.punct()
+        )
     }
 
     fn describe_detailed(&self, tense: Tense) -> String {
@@ -81,7 +90,10 @@ impl InstallStep for Timer {
         };
         let path = self.path.display();
         let content = self.unit.trim_end().replace('\n', "\n|\t");
-        format!("{verb} systemd timer unit to:\n|\t{path}\n| content:\n|\t{content}")
+        format!(
+            "{verb} systemd timer unit{}\n| path:\n|\t{path}\n| content:\n|\t{content}",
+            tense.punct()
+        )
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
@@ -108,7 +120,12 @@ impl InstallStep for EnableTimer {
             Tense::Future => "Will Enable",
             Tense::Active => "Enabling",
         };
-        format!("{verb} systemd {} timer: {}", self.mode, self.name)
+        format!(
+            "{verb} systemd {} timer: {}{}",
+            self.mode,
+            self.name,
+            tense.punct()
+        )
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
@@ -137,7 +154,7 @@ impl InstallStep for EnableService {
             Tense::Active => "Enabling",
         };
         let start = if self.start {
-            match (tense, self.already_running) {
+            match (&tense, self.already_running) {
                 (Tense::Past, true) => "restarted",
                 (Tense::Past, false) => "started",
                 (Tense::Questioning | Tense::Future, true) => "restart",
@@ -149,8 +166,10 @@ impl InstallStep for EnableService {
             ""
         };
         format!(
-            "{enable} and {start} systemd {} service: {}",
-            self.mode, self.name
+            "{enable} and {start} systemd {} service: {}{}",
+            self.mode,
+            self.name,
+            tense.punct(),
         )
     }
 

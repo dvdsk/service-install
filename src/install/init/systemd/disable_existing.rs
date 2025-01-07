@@ -32,8 +32,9 @@ impl RollbackStep for ReEnable {
             Tense::Future => "Will re-enable",
         };
         format!(
-            "{verb} the {} services that spawned the original file",
-            self.mode
+            "{verb} the {} services that spawned the original file{}",
+            self.mode,
+            tense.punct()
         )
     }
 }
@@ -53,8 +54,8 @@ impl InstallStep for Disable {
             Tense::Future => "Will disable",
         };
         format!(
-            "{verb} the {} services and/or timers running the file at the install location",
-            self.mode
+            "{verb} the {} services and/or timers running the file at the install location{}",
+            self.mode, tense.punct()
         )
     }
 
@@ -83,16 +84,16 @@ impl InstallStep for Disable {
         match (services.is_empty(), timers.is_empty()) {
             (false, false) => 
         format!(
-            "{verb} the {} services and/or timers running the file at the install location\n| services:{services}\n| timers:{timers}",
-            self.mode
+            "{verb} the {} services and/or timers running the file at the install location{}\n| services:{services}\n| timers:{timers}",
+            self.mode, tense.punct()
         ) ,
             (false, true) => 
         format!(
-            "{verb} the {} services running the file at the install location\n| services:{services}", self.mode),
+            "{verb} the {} services running the file at the install location{}\n| services:{services}", self.mode, tense.punct()),
             (true, false) => 
         format!(
-            "{verb} the {} timers running the file at the install location\n| timers:{timers}",
-            self.mode
+            "{verb} the {} timers running the file at the install location{}\n| timers:{timers}",
+            self.mode, tense.punct()
         ),
             (true, true) => unreachable!("Would have triggered error while constructing the disable installstep.")
         }

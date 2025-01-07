@@ -4,6 +4,7 @@ use crate::install::InstallError;
 use crate::install::InstallSteps;
 use crate::install::RollbackError;
 use crate::install::RollbackStep;
+use crate::install::StepOptions;
 use crate::Tense;
 
 use dialoguer::Confirm;
@@ -48,13 +49,19 @@ pub fn start(steps: InstallSteps, detailed: bool) -> Result<(), Error> {
     let mut rollback_steps = VecDeque::new();
     for mut step in steps {
         if detailed {
-            println!("{}?", step.describe_detailed(Tense::Questioning));
+            println!("{}", step.describe_detailed(Tense::Questioning));
         } else {
-            println!("{}?", step.describe(Tense::Questioning));
+            println!("{}", step.describe(Tense::Questioning));
         }
-        if !Confirm::new().interact()? {
-            rollback_if_user_wants_to(rollback_steps)?;
-            return Err(Error::Canceled);
+
+        match step.options() {
+            Some(StepOptions::YesOrAbort) => {
+                if !Confirm::new().interact()? {
+                    rollback_if_user_wants_to(rollback_steps)?;
+                    return Err(Error::Canceled);
+                }
+            }
+            None => (),
         }
 
         match step.perform() {

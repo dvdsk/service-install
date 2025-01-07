@@ -25,6 +25,7 @@ mod unit;
 
 pub(crate) use disable_existing::disable_step;
 pub use disable_existing::DisableError;
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, UpdateKind};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SystemCtlError {
@@ -95,14 +96,17 @@ pub(crate) fn path_is_systemd(path: &Path) -> Result<bool, PathCheckError> {
 pub(super) fn not_available() -> Result<bool, SetupError> {
     use sysinfo::{Pid, System};
     let mut s = System::new();
-    s.refresh_processes(
-        sysinfo::ProcessesToUpdate::Some([Pid::from(1)].as_slice()),
+    s.refresh_processes_specifics(
+        ProcessesToUpdate::Some([Pid::from(1)].as_slice()),
         true,
+        ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always),
     );
     let init_sys = &s
         .process(Pid::from(1))
         .expect("there should always be an init system")
-        .cmd()[0];
+        .cmd()
+        .first()
+        .expect("we requested command");
     Ok(!path_is_systemd(Path::new(init_sys)).map_err(Error::from)?)
 }
 

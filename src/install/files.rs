@@ -101,7 +101,10 @@ impl InstallStep for Move {
             .parent()
             .expect("path points to file, so has parent")
             .display();
-        format!("{verb} executable `{name}`\n| from:\n|\t{source}\n| to:\n|\t{target}")
+        format!(
+            "{verb} executable `{name}`{}\n| from:\n|\t{source}\n| to:\n|\t{target}",
+            tense.punct()
+        )
     }
 
     fn describe(&self, tense: Tense) -> String {
@@ -117,7 +120,10 @@ impl InstallStep for Move {
             .parent()
             .expect("path points to file, so has parent")
             .display();
-        format!("{verb} executable `{name}` to:\n|\t{target}")
+        format!(
+            "{verb} executable `{name}` to:\n|\t{target}{}",
+            tense.punct()
+        )
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
@@ -185,7 +191,10 @@ impl RollbackStep for MoveBack {
             Tense::Active => "Moving",
             Tense::Future => "Will move",
         };
-        format!("{verb} back the file that was origonally at the install location")
+        format!(
+            "{verb} back the file that was origonally at the install location{}",
+            tense.punct()
+        )
     }
 }
 
@@ -200,7 +209,7 @@ impl InstallStep for SetRootOwner {
             Tense::Active => "Setting",
             Tense::Future => "Will set",
         };
-        format!("{verb} executables owner to root")
+        format!("{verb} executables owner to root{}", tense.punct())
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
@@ -231,7 +240,10 @@ impl InstallStep for MakeReadExecOnly {
             Tense::Future => "Will make",
             Tense::Active => "Making",
         };
-        format!("{verb} the executable read and execute only")
+        format!(
+            "{verb} the executable read and execute only{}",
+            tense.punct()
+        )
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
@@ -276,7 +288,7 @@ impl RollbackStep for RestorePermissions {
             Tense::Questioning => "Restore",
             Tense::Future => "Will Restore",
         };
-        format!("{verb} executables previous permissions")
+        format!("{verb} executables previous permissions{}", tense.punct())
     }
 }
 
@@ -305,6 +317,10 @@ impl InstallStep for FilesAlreadyInstalled {
             self.describe(tense),
             self.target.display()
         )
+    }
+
+    fn options(&self) -> Option<super::StepOptions> {
+        None // this is a notification
     }
 }
 
@@ -395,7 +411,10 @@ impl InstallStep for MakeRemovable {
             Tense::Future => "Will make",
             Tense::Active => "Making",
         };
-        format!("{verb} the file taking up the install location removable")
+        format!(
+            "{verb} the file taking up the install location removable{}",
+            tense.punct()
+        )
     }
 
     fn describe_detailed(&self, tense: Tense) -> String {
@@ -405,7 +424,7 @@ impl InstallStep for MakeRemovable {
             Tense::Future => "Will make",
             Tense::Active => "Making",
         };
-        format!("A read only file is taking up the install location. {verb} it removable by making it writable\n| file:\n|\t{}", self.0.display())
+        format!("A read only file is taking up the install location. {verb} it removable by making it writable{}\n| file:\n|\t{}", tense.punct(), self.0.display())
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
@@ -535,7 +554,7 @@ impl RemoveStep for Remove {
             .file_name()
             .expect("In fn exe_path we made sure target is a file")
             .to_string_lossy();
-        format!("{verb} installed executable `{bin}`")
+        format!("{verb} installed executable `{bin}`{}", tense.punct())
     }
 
     fn describe_detailed(&self, tense: Tense) -> String {
@@ -555,7 +574,10 @@ impl RemoveStep for Remove {
             .parent()
             .expect("There is always a parent on linux")
             .display();
-        format!("{verb} installed executable `{bin}` at:\n|\t{dir}")
+        format!(
+            "{verb} installed executable `{bin}`{} Is installed at:\n|\t{dir}",
+            tense.punct()
+        )
     }
 
     fn perform(&mut self) -> Result<(), RemoveError> {

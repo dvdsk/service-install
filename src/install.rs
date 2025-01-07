@@ -167,6 +167,10 @@ pub enum BackupError {
     Read(#[source] std::io::Error),
 }
 
+pub enum StepOptions {
+    YesOrAbort,
+}
+
 /// One step in the install process. Can be executed or described.
 #[allow(clippy::module_name_repetitions)]
 pub trait InstallStep {
@@ -191,6 +195,10 @@ pub trait InstallStep {
     /// could run into an error that was not checked for while preparing. If you
     /// find this happens please make an issue.
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError>;
+    /// Is this a question and if so what options does the user have for responding?
+    fn options(&self) -> Option<StepOptions> {
+        Some(StepOptions::YesOrAbort)
+    }
 }
 
 impl std::fmt::Debug for &dyn InstallStep {
