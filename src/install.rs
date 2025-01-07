@@ -227,12 +227,6 @@ pub enum RemoveError {
         #[source]
         files::DeleteError,
     ),
-    #[error("Could not remove file(s), error")]
-    MoveBack(
-        #[from]
-        #[source]
-        files::DeleteError,
-    ),
     #[error("Something went wrong interacting with systemd")]
     Systemd(
         #[from]
