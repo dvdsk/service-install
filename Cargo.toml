@@ -1,6 +1,6 @@
 [package]
 name = "service-install"
-version = "0.5.4"
+version = "0.5.5"
 license = "MIT"
 description = "Easily provide users an install method on Linux systems"
 repository = "https://github.com/dvdsk/service-install"
@@ -16,12 +16,12 @@ include = [
 
 [dependencies]
 home = "0.5.5"
-uzers = "0.11.3"
-sysinfo = "0.30.7"
+uzers = "0.12.1"
+sysinfo = "0.33.1"
 
 sudo = "0.6.0"
-itertools = "0.10.5"
-thiserror = "1.0.40"
+itertools = "0.14.0"
+thiserror = "2.0.9"
 shell-escape = "0.1.5"
 
 time = "0.3.21"

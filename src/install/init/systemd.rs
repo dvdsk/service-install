@@ -93,11 +93,11 @@ pub(crate) fn path_is_systemd(path: &Path) -> Result<bool, PathCheckError> {
 
 // check if systemd is the init system (PID 1)
 pub(super) fn not_available() -> Result<bool, SetupError> {
-    use sysinfo::{Pid, ProcessRefreshKind, System, UpdateKind};
+    use sysinfo::{Pid, System};
     let mut s = System::new();
-    s.refresh_pids_specifics(
-        &[Pid::from(1)],
-        ProcessRefreshKind::new().with_cmd(UpdateKind::Always),
+    s.refresh_processes(
+        sysinfo::ProcessesToUpdate::Some([Pid::from(1)].as_slice()),
+        true,
     );
     let init_sys = &s
         .process(Pid::from(1))

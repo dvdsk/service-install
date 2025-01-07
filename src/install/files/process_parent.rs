@@ -55,7 +55,9 @@ pub(crate) fn list(
 
     let mut s = System::new();
     s.refresh_processes_specifics(
-        ProcessRefreshKind::new()
+        sysinfo::ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing()
             .with_exe(UpdateKind::Always)
             .with_cmd(UpdateKind::Always),
     );
@@ -76,7 +78,7 @@ pub(crate) fn list(
     });
 
     without_children
-        .cloned()
+        .copied()
         .map(|p| {
             let mut process = p;
             let mut tree = Vec::new();
@@ -146,13 +148,13 @@ impl InstallStep for KillOld {
             .map_err(KillOldError::KillUnavailable)
             .map_err(crate::install::InstallError::KillOld)?;
 
-        if !output.status.success() {
+        if output.status.success() {
+            Ok(None)
+        } else {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             Err(crate::install::InstallError::KillOld(
                 KillOldError::KillFailed(stderr),
             ))
-        } else {
-            Ok(None)
         }
     }
 

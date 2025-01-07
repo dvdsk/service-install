@@ -148,7 +148,7 @@ pub(crate) fn disable_step(
         .collect::<Result<_, _>>()
         .map_err(DisableError::CouldNotReadUnit)?;
 
-    let services = find_services_with_target_exe(services, target)?;
+    let services = find_services_with_target_exe(services, target);
     let names: HashSet<_> = services.iter().map(Unit::name).collect();
     let mut timers: Vec<_> = timers
         .into_iter()
@@ -173,7 +173,7 @@ pub(crate) fn disable_step(
     Ok(vec![disable])
 }
 
-fn find_services_with_target_exe(units: Vec<Unit>, target: &Path) -> Result<Vec<Unit>, FindError> {
+fn find_services_with_target_exe(units: Vec<Unit>, target: &Path) -> Vec<Unit> {
     let (units, errs): (Vec<_>, Vec<_>) = units
         .into_iter()
         .map(|unit| unit.exe_path().map(|exe| (exe, unit)))
@@ -182,10 +182,10 @@ fn find_services_with_target_exe(units: Vec<Unit>, target: &Path) -> Result<Vec<
         .partition_result();
 
     if !errs.is_empty() {
-        debug!("Some service files failed to parse: {errs:#?}")
+        debug!("Some service files failed to parse: {errs:#?}");
     }
 
-    Ok(units)
+    units
 }
 
 #[derive(Debug, thiserror::Error)]

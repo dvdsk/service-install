@@ -13,16 +13,23 @@ pub mod setup;
 pub mod teardown;
 
 pub(crate) use setup::set_up_steps;
+use sysinfo::ProcessesToUpdate;
 pub(crate) use teardown::tear_down_steps;
 
 pub(super) fn not_available() -> bool {
     use sysinfo::{ProcessRefreshKind, System, UpdateKind};
     let mut s = System::new();
-    s.refresh_processes_specifics(ProcessRefreshKind::new().with_cmd(UpdateKind::Always));
-    let cron_running = s
-        .processes()
-        .iter()
-        .any(|(_, process)| process.cmd().iter().any(|part| part.ends_with("/cron")));
+    s.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always),
+    );
+    let cron_running = s.processes().iter().any(|(_, process)| {
+        process
+            .cmd()
+            .iter()
+            .any(|part| part.to_string_lossy().ends_with("/cron"))
+    });
     !cron_running
 }
 

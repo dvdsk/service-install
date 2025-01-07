@@ -140,8 +140,8 @@ impl InstallStep for EnableService {
             match (tense, self.already_running) {
                 (Tense::Past, true) => "restarted",
                 (Tense::Past, false) => "started",
-                (Tense::Questioning, true) | (Tense::Future, true) => "restart",
-                (Tense::Questioning, false) | (Tense::Future, false) => "start",
+                (Tense::Questioning | Tense::Future, true) => "restart",
+                (Tense::Questioning | Tense::Future, false) => "start",
                 (Tense::Active, true) => "restarting",
                 (Tense::Active, false) => "starting",
             }

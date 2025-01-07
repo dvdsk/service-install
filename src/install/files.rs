@@ -135,9 +135,8 @@ struct SetRootOwner {
 impl InstallStep for SetRootOwner {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
-            Tense::Past => "Set",
+            Tense::Past | Tense::Questioning => "Set",
             Tense::Active => "Setting",
-            Tense::Questioning => "Set",
             Tense::Future => "Will set",
         };
         format!("{verb} executables owner to root")
@@ -181,7 +180,7 @@ impl InstallStep for MakeReadExecOnly {
             .map_err(SetReadOnlyError::GetPermissions)?
             .permissions();
         let mut permissions = org_permissions.clone();
-        permissions.set_mode(555);
+        permissions.set_mode(0o555);
         fs::set_permissions(&self.path, permissions).map_err(SetReadOnlyError::SetPermissions)?;
         Ok(Some(Box::new(RestorePermissions {
             path: self.path.clone(),
@@ -198,7 +197,7 @@ struct RestorePermissions {
 impl RollbackStep for RestorePermissions {
     fn perform(&mut self) -> Result<(), super::RollbackError> {
         match fs::set_permissions(&self.path, self.org_permissions.clone()) {
-            Ok(_) => Ok(()),
+            Ok(()) => Ok(()),
             // overwrite may have been set or the file removed by the user
             // we should no abort the rollback because the file is not there
             Err(io) if io.kind() == std::io::ErrorKind::NotFound => {
@@ -421,11 +420,11 @@ fn disable_if_running(
     for parent_info in process_parent::list(target, init_systems)? {
         match parent_info {
             IdRes::ParentIsInit { init, pid } => {
-                steps.append(&mut init.disable_steps(target, pid, mode, run_as)?)
+                steps.append(&mut init.disable_steps(target, pid, mode, run_as)?);
             }
             IdRes::NoParent => return Err(TargetInUseError::NoParent)?,
             IdRes::ParentNotInit { parents, pid } => {
-                steps.push(process_parent::kill_old_steps(pid, parents))
+                steps.push(process_parent::kill_old_steps(pid, parents));
             }
         }
     }
