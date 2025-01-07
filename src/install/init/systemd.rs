@@ -29,16 +29,20 @@ pub use disable_existing::DisableError;
 #[derive(thiserror::Error, Debug)]
 pub enum SystemCtlError {
     #[error("Could not run systemctl")]
-    Io(#[from] #[source] std::io::Error),
+    Io(
+        #[from]
+        #[source]
+        std::io::Error,
+    ),
     #[error("Systemctl failed: {reason}")]
     Failed { reason: String },
     #[error("Timed out trying to enable service")]
-    EnableTimeOut,
+    RestartTimeOut,
     #[error("Timed out trying to disable service")]
     DisableTimeOut,
     #[error("Timed out trying to stop service")]
     StopTimeOut,
-    #[error("Something send a signal to systemctl ending it")]
+    #[error("Something send a signal to systemctl ending it before it could finish")]
     Terminated,
 }
 
@@ -70,6 +74,8 @@ pub enum Error {
         #[source]
         PathCheckError,
     ),
+    #[error("Could not check if there is an existing service we will replace")]
+    CheckingRunning(#[source] SystemCtlError),
 }
 
 pub(crate) fn path_is_systemd(path: &Path) -> Result<bool, PathCheckError> {
@@ -111,7 +117,7 @@ pub(super) fn set_up_steps(params: &Params) -> Result<Steps, SetupError> {
         Trigger::OnSchedule(ref schedule) => {
             setup::with_timer(&path_without_extension, params, schedule)
         }
-        Trigger::OnBoot => setup::without_timer(&path_without_extension, params),
+        Trigger::OnBoot => setup::without_timer(&path_without_extension, params)?,
     })
 }
 
@@ -193,7 +199,7 @@ fn systemctl(args: &[&'static str], service: &OsStr) -> Result<(), SystemCtlErro
     Err(SystemCtlError::Failed { reason })
 }
 
-fn is_active(service: &OsStr, mode: Mode) -> Result<bool, SystemCtlError> {
+fn is_active(service: impl AsRef<OsStr>, mode: Mode) -> Result<bool, SystemCtlError> {
     let args = match mode {
         Mode::System => &["is-active"][..],
         Mode::User => &["is-active", "--user"][..],
@@ -230,7 +236,17 @@ fn enable(unit: &OsStr, mode: Mode, start: bool) -> Result<(), SystemCtlError> {
     }
 
     systemctl(&args, unit)?;
-    wait_for(unit, true, mode, SystemCtlError::EnableTimeOut)
+    wait_for(unit, true, mode, SystemCtlError::RestartTimeOut)
+}
+
+fn restart(unit: &OsStr, mode: Mode) -> Result<(), SystemCtlError> {
+    let args = match mode {
+        Mode::System => vec!["restart"],
+        Mode::User => vec!["restart", "--user"],
+    };
+
+    systemctl(&args, unit)?;
+    wait_for(unit, true, mode, SystemCtlError::RestartTimeOut)
 }
 
 fn disable(unit: &OsStr, mode: Mode, start: bool) -> Result<(), SystemCtlError> {

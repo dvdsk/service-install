@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Offers to stop running processes taking up the install location
 
+### Changed
+- No longer replaces the binary file if its already installed and we are
+running from it.
+- Restart service if one already existed
+
 ## Version 0.5.3 - 2024-12-23
 
 ### Changed

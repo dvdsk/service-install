@@ -1,3 +1,4 @@
+use crate::install::init::systemd::{self, is_active};
 use crate::install::{init, InstallError, RollbackStep, Tense};
 use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
@@ -124,32 +125,43 @@ struct EnableService {
     name: String,
     mode: Mode,
     start: bool,
+    already_running: bool,
 }
 
 impl InstallStep for EnableService {
     fn describe(&self, tense: Tense) -> String {
-        let verb = match tense {
+        let enable = match tense {
             Tense::Past => "Enabled",
             Tense::Questioning => "Enable",
             Tense::Future => "Will Enable",
             Tense::Active => "Enabling",
         };
         let start = if self.start {
-            match tense {
-                Tense::Past => "and started ",
-                Tense::Questioning => "and start ",
-                Tense::Future => "and start ",
-                Tense::Active => "and starting ",
+            match (tense, self.already_running) {
+                (Tense::Past, true) => "restarted",
+                (Tense::Past, false) => "started",
+                (Tense::Questioning, true) | (Tense::Future, true) => "restart",
+                (Tense::Questioning, false) | (Tense::Future, false) => "start",
+                (Tense::Active, true) => "restarting",
+                (Tense::Active, false) => "starting",
             }
         } else {
             ""
         };
-        format!("{verb} {start}systemd {} service: {}", self.mode, self.name)
+        format!(
+            "{enable} and {start} systemd {} service: {}",
+            self.mode, self.name
+        )
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
         let name = self.name.clone() + ".service";
         super::enable(name.as_ref(), self.mode, self.start).map_err(Error::SystemCtl)?;
+
+        if self.already_running {
+            super::restart(name.as_ref(), self.mode).map_err(Error::SystemCtl)?;
+        }
+
         Ok(Some(Box::new(teardown::DisableService {
             name: self.name.clone(),
             mode: self.mode,
@@ -184,18 +196,23 @@ pub(crate) fn with_timer(
     vec![create_service, create_timer, enable]
 }
 
-pub(crate) fn without_timer(path_without_extension: &Path, params: &Params) -> Steps {
+pub(crate) fn without_timer(
+    path_without_extension: &Path,
+    params: &Params,
+) -> Result<Steps, systemd::Error> {
     let unit = render_service(params);
     let path = with_added_extension(path_without_extension, "service");
+    let already_running = is_active(&unit, params.mode).map_err(systemd::Error::CheckingRunning)?;
     let create_service = Box::new(Service { unit, path });
 
     let enable = Box::new(EnableService {
         name: params.name.clone(),
         mode: params.mode,
         start: true,
+        already_running,
     });
 
-    vec![create_service, enable]
+    Ok(vec![create_service, enable])
 }
 
 fn render_service(params: &Params) -> String {

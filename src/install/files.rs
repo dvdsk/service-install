@@ -1,3 +1,4 @@
+use std::env::current_exe;
 use std::ffi::OsString;
 use std::fmt::Display;
 use std::fs::{self, Permissions};
@@ -41,6 +42,8 @@ pub enum MoveError {
     ),
     #[error("could not check if already existing file is read only")]
     CheckExistingFilePermissions(#[source] std::io::Error),
+    #[error("could not check if we are running from the target location")]
+    ResolveCurrentExe(#[source] std::io::Error),
 }
 
 fn system_dir() -> Option<PathBuf> {
@@ -217,6 +220,34 @@ impl RollbackStep for RestorePermissions {
     }
 }
 
+struct FilesAlreadyInstalled {
+    target: PathBuf,
+}
+
+impl InstallStep for FilesAlreadyInstalled {
+    fn describe(&self, tense: Tense) -> String {
+        match tense {
+            Tense::Past => "this binary was already installed in the target location",
+            Tense::Questioning | Tense::Future | Tense::Active => {
+                "this binary is already installed in the target location"
+            }
+        }
+        .to_owned()
+    }
+
+    fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
+        Ok(None)
+    }
+
+    fn describe_detailed(&self, tense: Tense) -> String {
+        format!(
+            "{}\n\t-target location: {}",
+            self.describe(tense),
+            self.target.display()
+        )
+    }
+}
+
 type Steps = Vec<Box<dyn InstallStep>>;
 pub(crate) fn move_files(
     source: PathBuf,
@@ -235,6 +266,13 @@ pub(crate) fn move_files(
         .ok_or(MoveError::SourceNotFile)?
         .to_owned();
     let target = dir.join(&file_name);
+
+    if target.is_file() && target == current_exe().map_err(MoveError::ResolveCurrentExe)? {
+        let step = FilesAlreadyInstalled {
+            target: target.clone(),
+        };
+        return Ok((vec![Box::new(step) as Box<dyn InstallStep>], target));
+    }
 
     if target.is_file() && !overwrite_existing {
         return Err(MoveError::TargetExists {
