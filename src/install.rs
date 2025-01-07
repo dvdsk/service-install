@@ -9,6 +9,7 @@ use std::ffi::OsString;
 use std::fmt::Display;
 
 pub use builder::Spec;
+use files::MoveBackError;
 use itertools::{Either, Itertools};
 
 use crate::Tense;
@@ -138,8 +139,6 @@ pub enum InstallError {
         #[source]
         init::systemd::Error,
     ),
-    #[error("Could not copy executable")]
-    CopyExe(#[source] std::io::Error),
     #[error("Could not set the owner of the installed executable to be root")]
     SetRootOwner(#[source] std::io::Error),
     #[error("Could not make the installed executable read only")]
@@ -152,12 +151,26 @@ pub enum InstallError {
     CouldNotStop,
     #[error("Could not kill the process preventing installing the new binary")]
     KillOld(#[source] files::process_parent::KillOldError),
+    #[error("Could not copy executable to install location")]
+    CopyExeError(#[source] std::io::Error),
+    #[error("Failed to make short lived backup of file taking up install location")]
+    Backup(#[source] BackupError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum BackupError {
+    #[error("Could not create temporary file")]
+    Create(#[source] std::io::Error),
+    #[error("Could not write to temporary file")]
+    Write(#[source] std::io::Error),
+    #[error("Could not read from file")]
+    Read(#[source] std::io::Error),
 }
 
 /// One step in the install process. Can be executed or described.
 #[allow(clippy::module_name_repetitions)]
 pub trait InstallStep {
-    /// A short (one line) description of what this performing this step will
+    /// A short (one line) description of what performing this step will
     /// do. Pass in the tense you want for the description (past, present or
     /// future)
     fn describe(&self, tense: Tense) -> String;
@@ -214,6 +227,12 @@ pub enum RemoveError {
         #[source]
         files::DeleteError,
     ),
+    #[error("Could not remove file(s), error")]
+    MoveBack(
+        #[from]
+        #[source]
+        files::DeleteError,
+    ),
     #[error("Something went wrong interacting with systemd")]
     Systemd(
         #[from]
@@ -260,15 +279,15 @@ impl Display for &dyn RemoveStep {
 
 #[derive(Debug, thiserror::Error)]
 pub enum RollbackError {
-    #[error("Could not rollback, error")]
+    #[error("Could not remove file, error")]
     Removing(
         #[from]
         #[source]
         RemoveError,
     ),
-    #[error("Could not rollback, error restoring file permissions")]
+    #[error("error restoring file permissions")]
     RestoringPermissions(#[source] std::io::Error),
-    #[error("Could not rollback, error re-enabling service")]
+    #[error("error re-enabling service")]
     ReEnabling(
         #[from]
         #[source]
@@ -294,6 +313,8 @@ pub enum RollbackError {
         #[source]
         SetCrontabError,
     ),
+    #[error("Could not restore original file")]
+    MovingBack(#[source] MoveBackError),
 }
 
 /// Undoes a [`InstallStep`]. Can be executed or described.

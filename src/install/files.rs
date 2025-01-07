@@ -2,7 +2,7 @@ use std::env::current_exe;
 use std::ffi::OsString;
 use std::fmt::Display;
 use std::fs::{self, Permissions};
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -12,7 +12,10 @@ use crate::install::files::process_parent::IdRes;
 use crate::install::RemoveStep;
 
 use super::init::PathCheckError;
-use super::{init, InstallError, InstallStep, Mode, RemoveError, RollbackStep, Tense};
+use super::{
+    init, BackupError, InstallError, InstallStep, Mode, RemoveError, RollbackError, RollbackStep,
+    Tense,
+};
 
 pub mod process_parent;
 
@@ -118,13 +121,71 @@ impl InstallStep for Move {
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
-        if let Err(e) = std::fs::copy(&self.source, &self.target) {
-            Err(InstallError::CopyExe(e))
-        } else {
-            Ok(Some(Box::new(Remove {
+        let rollback_step = if self.target.is_file() {
+            let target_content = fs::read(&self.target)
+                .map_err(BackupError::Read)
+                .map_err(InstallError::Backup)?;
+
+            let mut backup = tempfile::tempfile()
+                .map_err(BackupError::Create)
+                .map_err(InstallError::Backup)?;
+            backup
+                .write_all(&target_content)
+                .map_err(BackupError::Write)
+                .map_err(InstallError::Backup)?;
+
+            Box::new(MoveBack {
+                backup,
                 target: self.target.clone(),
-            })))
+            }) as Box<dyn RollbackStep>
+        } else {
+            Box::new(Remove {
+                target: self.target.clone(),
+            }) as Box<dyn RollbackStep>
+        };
+
+        match std::fs::copy(&self.source, &self.target) {
+            Err(e) => Err(InstallError::CopyExeError(e)),
+            Ok(_) => Ok(Some(rollback_step)),
         }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum MoveBackError {
+    #[error("Could not read backup from file")]
+    ReadingBackup(#[source] std::io::Error),
+    #[error("Could not write to target")]
+    WritingToTarget(#[source] std::io::Error),
+}
+
+struct MoveBack {
+    /// created by tempfile will be auto cleaned by OS when
+    /// this drops
+    backup: std::fs::File,
+    target: PathBuf,
+}
+
+impl RollbackStep for MoveBack {
+    fn perform(&mut self) -> Result<(), RollbackError> {
+        let mut buf = Vec::new();
+        self.backup
+            .read_to_end(&mut buf)
+            .map_err(MoveBackError::ReadingBackup)
+            .map_err(RollbackError::MovingBack)?;
+        fs::write(&self.target, buf)
+            .map_err(MoveBackError::WritingToTarget)
+            .map_err(RollbackError::MovingBack)
+    }
+
+    fn describe(&self, tense: Tense) -> String {
+        let verb = match tense {
+            Tense::Past => "Moved",
+            Tense::Questioning => "Move",
+            Tense::Active => "Moving",
+            Tense::Future => "Will move",
+        };
+        format!("{verb} back the file that was origonally at the install location")
     }
 }
 
@@ -195,7 +256,7 @@ struct RestorePermissions {
 }
 
 impl RollbackStep for RestorePermissions {
-    fn perform(&mut self) -> Result<(), super::RollbackError> {
+    fn perform(&mut self) -> Result<(), RollbackError> {
         match fs::set_permissions(&self.path, self.org_permissions.clone()) {
             Ok(()) => Ok(()),
             // overwrite may have been set or the file removed by the user
@@ -204,7 +265,7 @@ impl RollbackStep for RestorePermissions {
                 tracing::warn!("Could not restore permissions, file is not there");
                 Ok(())
             }
-            Err(other) => Err(super::RollbackError::RestoringPermissions(other)),
+            Err(other) => Err(RollbackError::RestoringPermissions(other)),
         }
     }
 

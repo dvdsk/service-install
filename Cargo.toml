@@ -1,6 +1,6 @@
 [package]
 name = "service-install"
-version = "0.5.5"
+version = "0.5.4"
 license = "MIT"
 description = "Easily provide users an install method on Linux systems"
 repository = "https://github.com/dvdsk/service-install"
@@ -27,6 +27,7 @@ shell-escape = "0.1.5"
 time = "0.3.21"
 tracing = { version="0.1.37", optional=true }
 dialoguer = { version="0.11.0", optional=true }
+tempfile = "3.15.0"
 
 [features]
 default = ["tracing", "tui"]

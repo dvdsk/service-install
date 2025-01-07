@@ -48,9 +48,9 @@ pub fn start(steps: InstallSteps, detailed: bool) -> Result<(), Error> {
     let mut rollback_steps = VecDeque::new();
     for mut step in steps {
         if detailed {
-            println!("{}", step.describe_detailed(Tense::Questioning));
+            println!("{}?", step.describe_detailed(Tense::Questioning));
         } else {
-            println!("{}", step.describe(Tense::Questioning));
+            println!("{}?", step.describe(Tense::Questioning));
         }
         if !Confirm::new().interact()? {
             rollback_if_user_wants_to(rollback_steps)?;

@@ -123,7 +123,7 @@ impl InstallStep for KillOld {
             }
             crate::Tense::Questioning => {
                 "there is a program running with the same name taking up the \
-                    install location terminate it?"
+                    install location terminate it"
             }
             crate::Tense::Active => {
                 "there is a program running with the same name taking up the \
@@ -172,18 +172,18 @@ impl InstallStep for KillOld {
                 .join("\n\twhich was started by: ")
         };
 
-        match tense {
+        match tense { // note final punctuation (question mark or dot) is added by printer
             crate::Tense::Past => format!(
                 "there was a program running with the same name taking up the \
             install location. It was was started by: {list}\nIt had to be terminated \
-            before we could continue."
+            before we could continue"
             ),
             crate::Tense::Questioning => format!(
                 "there is a program running with the same name taking up the \
             install location. It was was started by: {list}\nIt must be terminated \
             before we can continue. Terminating might not work or the parent \
             can restart the program. Do you wish to try to stop the program and \
-            continue installation?"
+            continue installation"
             ),
             crate::Tense::Active => format!(
                 "there is a program running with the same name taking up the \

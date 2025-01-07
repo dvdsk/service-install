@@ -9,7 +9,7 @@ fn cleanup() {
     // cleanup
     let steps = install_user!().service_name("cli").prepare_remove().unwrap();
     for mut step in steps {
-        println!("{}", step.describe_detailed(Tense::Questioning));
+        println!("{}", step.describe_detailed(Tense::Past));
         step.perform().unwrap();
     }
     println!("Remove complete")

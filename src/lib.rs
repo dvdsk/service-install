@@ -2,7 +2,7 @@
 
 /// Changes the tense of the string returned by the `describe` functions for
 /// [`InstallStep`](install::InstallStep), [`RemoveStep`](install::RemoveStep) and
-/// [Rollback](install::RollbackStep).
+/// [Rollback](install::RollbackStep). Final punctuation is missing and must be added.
 pub enum Tense {
     Past,
     Questioning,

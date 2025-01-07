@@ -36,9 +36,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .interact()?
         {
             for step in &mut rollback_steps {
-                let did = step.describe(Tense::Questioning);
+                let did = step.describe(Tense::Past);
                 step.perform()?;
-                println!("{}", did);
+                println!("{}.", did);
             }
         }
     }
