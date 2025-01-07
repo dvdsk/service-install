@@ -221,7 +221,7 @@ pub(crate) fn without_timer(
 ) -> Result<Steps, systemd::Error> {
     let unit = render_service(params);
     let path = with_added_extension(path_without_extension, "service");
-    let already_running = is_active(&unit, params.mode).map_err(systemd::Error::CheckingRunning)?;
+    let already_running = is_active(&params.name, params.mode).map_err(systemd::Error::CheckingRunning)?;
     let create_service = Box::new(Service { unit, path });
 
     let enable = Box::new(EnableService {

@@ -313,7 +313,7 @@ impl InstallStep for FilesAlreadyInstalled {
 
     fn describe_detailed(&self, tense: Tense) -> String {
         format!(
-            "{}\n\t-target location: {}",
+            "{}\n|\ttarget location: {}",
             self.describe(tense),
             self.target.display()
         )
