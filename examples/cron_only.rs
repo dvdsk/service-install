@@ -16,7 +16,7 @@ fn main() {
         .unwrap();
 
     for mut step in steps {
-        println!("{}?", step.describe_detailed(Tense::Questioning));
+        println!("{}", step.describe_detailed(Tense::Questioning));
         step.perform().unwrap();
     }
     println!("Install complete\n\n");
@@ -24,7 +24,7 @@ fn main() {
     let steps = install_user!().service_name("cli").prepare_remove().unwrap();
 
     for mut step in steps {
-        println!("{}?", step.describe_detailed(Tense::Questioning));
+        println!("{}", step.describe_detailed(Tense::Questioning));
         step.perform().unwrap();
     }
     println!("Remove complete")

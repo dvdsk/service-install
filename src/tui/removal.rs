@@ -36,7 +36,7 @@ pub fn start(steps: RemoveSteps) -> Result<(), Error> {
     let mut errors = Vec::new();
     for mut step in steps {
         if !Confirm::new()
-            .with_prompt(format!("{}?", step.describe(Tense::Questioning)))
+            .with_prompt(format!("{}", step.describe(Tense::Questioning)))
             .interact()?
         {
             return Err(Error::Canceled);
