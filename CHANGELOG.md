@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Version 0.5.5 - 2025-01-07
+
 ### Changed
 - No longer replaces the binary file if its already installed and we are
 running from it.
