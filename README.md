@@ -37,7 +37,7 @@ fn main() {
     let done = install_user!()
         .current_exe()
         .unwrap()
-        .name("cli")
+        .service_name("cli")
         .on_schedule(schedule)
         .prepare_install()
         .unwrap()
