@@ -2,7 +2,7 @@ use std::env::current_exe;
 use std::ffi::OsString;
 use std::fmt::Display;
 use std::fs::{self, Permissions};
-use std::io::{BufReader, ErrorKind, Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -414,8 +414,8 @@ fn content_identical(existing: &Path, new: &Path) -> Result<bool, CompareFileErr
         return Ok(true);
     }
 
-    let existing = fs::File::open(existing).map_err(E::IoExisting)?;
-    let new = fs::File::open(new).map_err(E::IoNew)?;
+    let mut existing = fs::File::open(existing).map_err(E::IoExisting)?;
+    let mut new = fs::File::open(new).map_err(E::IoNew)?;
 
     if existing.metadata().map_err(E::LenExisting)?.len()
         != new.metadata().map_err(E::LenNew)?.len()
@@ -423,28 +423,40 @@ fn content_identical(existing: &Path, new: &Path) -> Result<bool, CompareFileErr
         return Ok(false);
     }
 
-    let mut existing = BufReader::new(existing).bytes();
-    let mut new = BufReader::new(new).bytes();
+    let mut e_buf = [0; 4096];
+    let mut n_buf = [0; 4096];
 
-    let mut all_equal = true;
-    for pair in existing.by_ref().zip(new.by_ref()) {
-        match pair {
-            (Ok(a), Ok(b)) if a != b => {
-                all_equal = false;
-                break;
-            }
-            (Ok(_), Ok(_)) => (),
-            (Err(e), _) => return Err(E::ReadExisting(e)),
-            (_, Err(e)) => return Err(E::ReadNew(e)),
+    loop {
+        let e_read = read_into_buf(&mut existing, &mut e_buf).map_err(E::ReadExisting)?;
+        let n_read = read_into_buf(&mut new, &mut n_buf).map_err(E::ReadNew)?;
+        if e_read != n_read {
+            return Ok(false);
+        } else if e_read.len() == 4096 {
+            return Ok(true);
+        }
+    }
+}
+
+/// Alternative to read_exact that always returns the read data. If the length
+/// of the input buffer is longer then the result EOF has been read. The last
+/// data is then in the returned slice.
+fn read_into_buf<'a>(
+    file: &mut fs::File,
+    buf: &'a mut [u8],
+) -> Result<&'a mut [u8], std::io::Error> {
+    let mut total_read = 0;
+    let mut free_buf = &mut buf[..];
+    loop {
+        let n = file.read(&mut free_buf)?;
+        total_read += n;
+        if n == 0 || n == free_buf.len() {
+            break;
+        } else {
+            free_buf = &mut free_buf[n..];
         }
     }
 
-    // should be caught by metadata, cant hurt to check again though
-    if new.next().is_some() || existing.next().is_some() {
-        return Ok(false);
-    }
-
-    Ok(all_equal)
+    Ok(&mut buf[..total_read])
 }
 
 struct MakeRemovable(PathBuf);
@@ -487,7 +499,7 @@ impl InstallStep for MakeRemovable {
             Tense::Future => "Will make",
             Tense::Active => "Making",
         };
-        format!("A read only file is taking up the install location. {verb} it removable by making it writable{}\n| file:\n|\t{}", tense.punct(), self.0.display())
+        format!("A different read only file is taking up the install location. {verb} it removable by making it writable{}\n| file:\n|\t{}", tense.punct(), self.0.display())
     }
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
