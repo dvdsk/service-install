@@ -2,7 +2,7 @@ use std::env::current_exe;
 use std::ffi::OsString;
 use std::fmt::Display;
 use std::fs::{self, Permissions};
-use std::io::{ErrorKind, Read, Write};
+use std::io::{BufReader, ErrorKind, Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -47,6 +47,10 @@ pub enum MoveError {
     CheckExistingFilePermissions(#[source] std::io::Error),
     #[error("could not check if we are running from the target location")]
     ResolveCurrentExe(#[source] std::io::Error),
+    #[error(
+        "could not check if already existing file is identical to what we are about to install"
+    )]
+    CompareFiles(#[source] CompareFileError),
 }
 
 fn system_dir() -> Option<PathBuf> {
@@ -342,15 +346,16 @@ pub(crate) fn move_files(
         .ok_or(MoveError::SourceNotFile)?
         .to_owned();
     let target = dir.join(&file_name);
+    let current_exe = current_exe().map_err(MoveError::ResolveCurrentExe)?;
 
-    if target.is_file() && target == current_exe().map_err(MoveError::ResolveCurrentExe)? {
+    if target.is_file()
+        && content_identical(&target, &current_exe).map_err(MoveError::CompareFiles)?
+    {
         let step = FilesAlreadyInstalled {
             target: target.clone(),
         };
         return Ok((vec![Box::new(step) as Box<dyn InstallStep>], target));
-    }
-
-    if target.is_file() && !overwrite_existing {
+    } else if target.is_file() && !overwrite_existing {
         return Err(MoveError::TargetExists {
             name: file_name.to_string_lossy().to_string(),
             dir,
@@ -382,6 +387,64 @@ pub(crate) fn move_files(
     }
 
     Ok((steps, target))
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CompareFileError {
+    #[error("opening the new file")]
+    IoNew(#[source] std::io::Error),
+    #[error("opening existing file")]
+    IoExisting(#[source] std::io::Error),
+
+    #[error("checking length of new file")]
+    LenNew(#[source] std::io::Error),
+    #[error("checking length of existing file")]
+    LenExisting(#[source] std::io::Error),
+
+    #[error("reading the new file")]
+    ReadNew(#[source] std::io::Error),
+    #[error("reading the existing file")]
+    ReadExisting(#[source] std::io::Error),
+}
+
+fn content_identical(existing: &Path, new: &Path) -> Result<bool, CompareFileError> {
+    use CompareFileError as E;
+
+    if existing == new {
+        return Ok(true);
+    }
+
+    let existing = fs::File::open(existing).map_err(E::IoExisting)?;
+    let new = fs::File::open(new).map_err(E::IoNew)?;
+
+    if existing.metadata().map_err(E::LenExisting)?.len()
+        != new.metadata().map_err(E::LenNew)?.len()
+    {
+        return Ok(false);
+    }
+
+    let mut existing = BufReader::new(existing).bytes();
+    let mut new = BufReader::new(new).bytes();
+
+    let mut all_equal = true;
+    for pair in existing.by_ref().zip(new.by_ref()) {
+        match pair {
+            (Ok(a), Ok(b)) if a != b => {
+                all_equal = false;
+                break;
+            }
+            (Ok(_), Ok(_)) => (),
+            (Err(e), _) => return Err(E::ReadExisting(e)),
+            (_, Err(e)) => return Err(E::ReadNew(e)),
+        }
+    }
+
+    // should be caught by metadata, cant hurt to check again though
+    if new.next().is_some() || existing.next().is_some() {
+        return Ok(false);
+    }
+
+    Ok(all_equal)
 }
 
 struct MakeRemovable(PathBuf);

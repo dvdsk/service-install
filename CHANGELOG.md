@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `install` and `remove` play better with error wrapping libs as they return concrete 
 error types now
+- we now check if an already existing file is identical byte for byte to what
+  we are trying to install
 
 ## Version 0.5.5 - 2025-01-07
 
