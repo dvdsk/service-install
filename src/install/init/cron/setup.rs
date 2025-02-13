@@ -60,18 +60,26 @@ pub(crate) fn set_up_steps(params: &Params) -> Result<Steps, SetupError> {
     };
 
     let exe_path = params.exe_path.shell_escaped();
-    let exe_args: String = Itertools::intersperse(
-        params.exe_args.iter().map(String::shell_escaped),
-        String::from(" "),
-    )
-    .collect();
+    let exe_args: String = params.exe_args.iter().map(String::shell_escaped).join(" ");
     let set_working_dir = params
         .working_dir
         .as_ref()
         .map(PathBuf::shell_escaped)
         .map(|dir| format!("cd {dir} && "))
         .unwrap_or_default();
-    let command = format!("{set_working_dir}{exe_path} {exe_args}");
+    let set_env_vars = if params.environment.is_empty() {
+        String::new()
+    } else {
+        "export".to_owned()
+            + &params
+                .environment
+                .iter()
+                .map(|(key, val)| format!("{}={}", key.shell_escaped(), val.shell_escaped()))
+                .join(" ")
+            + ";"
+    };
+
+    let command = format!("{set_env_vars}{set_working_dir}{exe_path} {exe_args}");
     let rule = format!("{when} {command}");
 
     steps.push(Box::new(Add {

@@ -12,7 +12,7 @@ binaries without runtime dependencies. Such an installer provides less technical
 users with an easy way to set up your program. It is not a full alternative for
 integrating with a package manager. For example there is no way to provide
 updates. Building your own installer is however significantly less work then
-trying to get your application in all the linux package managers. It is also
+trying to get your application in all the Linux package managers. It is also
 ideal for tools that are not public. 
 
 ### Features
@@ -25,7 +25,7 @@ ideal for tools that are not public.
  - Undo the installation tearing down the service and removing the files
 
 ### Example
-Installing the current program as a user service named *cli* that should run at
+Installing the current program as a user service named `cli` that should run at
 10:42 every day. This does not need superuser/admin permissions.
 
 ```rust,ignore
@@ -45,7 +45,7 @@ fn main() {
         .unwrap();
 }
 ```
-For more detailed examples (such as a working Tui/Prompt) see 
+For more detailed examples (such as a working Tui/Prompt) see the examples on [GitHub](https://github.com/dvdsk/service-install/tree/main/examples). For a detailed description of all these options look at the install [`Spec`].
 
 ### Future work
  - Make the pre build TUI/Prompt more customizable.

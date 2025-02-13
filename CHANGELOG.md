@@ -12,6 +12,10 @@ error types now
 - we now check if an already existing file is identical byte for byte to what
   we are trying to install
 
+### Added
+- `env_vars` and `env_var` to install builder. They allow setting environmental
+  variables.
+
 ## Version 0.5.5 - 2025-01-07
 
 ### Changed

@@ -28,7 +28,7 @@ pub enum Mode {
     User,
     /// install to the entire system, the installation/removal must be ran as
     /// superuser/admin or it will return
-    /// [`InstallError::NeedRootForSysInstall`] or [`PrepareRemoveError::NeedRoot`]
+    /// [`PrepareInstallError::NeedRootForSysInstall`] or [`PrepareRemoveError::NeedRoot`]
     System,
 }
 
@@ -174,11 +174,11 @@ pub enum StepOptions {
 /// One step in the install process. Can be executed or described.
 #[allow(clippy::module_name_repetitions)]
 pub trait InstallStep {
-    /// A short (one line) description of what performing this step will
+    /// A short (one line) description of what running perform will
     /// do. Pass in the tense you want for the description (past, present or
     /// future)
     fn describe(&self, tense: Tense) -> String;
-    /// A verbose description of what performing this step will do to the
+    /// A verbose description of what running perform will do to the
     /// system. Includes as many details as possible. Pass in the tense you want
     /// for the description (past, present or future)
     fn describe_detailed(&self, tense: Tense) -> String {
@@ -413,7 +413,7 @@ impl InstallSteps {
     }
 }
 
-impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
+impl<T: ToAssign> Spec<builder::PathIsSet, builder::NameIsSet, builder::TriggerIsSet, T> {
     /// Prepare for installing. This makes a number of checks and if they are
     /// passed it returns the [`InstallSteps`]. These implement [`IntoIterator`] and
     /// can be inspected and executed one by one or executed in one step using
@@ -433,6 +433,7 @@ impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
             service_name: Some(name),
             bin_name,
             args,
+            environment,
             trigger: Some(trigger),
             overwrite_existing,
             working_dir,
@@ -474,6 +475,7 @@ impl<T: ToAssign> Spec<builder::Set, builder::Set, builder::Set, T> {
 
             exe_path,
             exe_args: args,
+            environment,
             working_dir,
 
             trigger,

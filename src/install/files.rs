@@ -447,7 +447,7 @@ fn read_into_buf<'a>(
     let mut total_read = 0;
     let mut free_buf = &mut buf[..];
     loop {
-        let n = file.read(&mut free_buf)?;
+        let n = file.read(free_buf)?;
         total_read += n;
         if n == 0 || n == free_buf.len() {
             break;

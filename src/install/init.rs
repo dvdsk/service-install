@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 pub mod cron;
@@ -146,6 +147,7 @@ pub(crate) struct Params {
 
     pub(crate) exe_path: PathBuf,
     pub(crate) exe_args: Vec<String>,
+    pub(crate) environment: HashMap<String, String>,
     pub(crate) working_dir: Option<PathBuf>,
 
     pub(crate) trigger: Trigger,

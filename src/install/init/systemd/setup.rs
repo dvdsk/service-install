@@ -1,5 +1,6 @@
 use crate::install::init::systemd::{self, is_active};
 use crate::install::{init, InstallError, RollbackStep, Tense};
+use std::collections::HashMap;
 use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -221,7 +222,8 @@ pub(crate) fn without_timer(
 ) -> Result<Steps, systemd::Error> {
     let unit = render_service(params);
     let path = with_added_extension(path_without_extension, "service");
-    let already_running = is_active(&params.name, params.mode).map_err(systemd::Error::CheckingRunning)?;
+    let already_running =
+        is_active(&params.name, params.mode).map_err(systemd::Error::CheckingRunning)?;
     let create_service = Box::new(Service { unit, path });
 
     let enable = Box::new(EnableService {
@@ -239,25 +241,26 @@ fn render_service(params: &Params) -> String {
         exe_path,
         working_dir,
         exe_args,
+        environment,
         trigger,
         ..
     } = params;
 
     let description = params.description();
 
-    let exe_path = exe_path.shell_escaped();
-    let exe_args: String = exe_args.iter().map(String::shell_escaped).join(" \\\n\t");
-
     let working_dir_section = working_dir
         .as_ref()
         .map(|d| format!("\nWorkingDirectory={}", d.shell_escaped()))
         .unwrap_or_default();
-
-    let user = params
+    let user_section = params
         .run_as
         .as_ref()
         .map(|user| format!("\nUser={user}"))
         .unwrap_or_default();
+    let environment_section = render_environment_section(environment);
+
+    let exe_path = exe_path.shell_escaped();
+    let exe_args: String = exe_args.iter().map(String::shell_escaped).join(" \\\n\t");
 
     let target = match params.mode {
         Mode::User => "default.target",
@@ -277,10 +280,22 @@ Description={description}
 After=network.target
 
 [Service]
-Type=simple{working_dir_section}{user}
+Type=simple{working_dir_section}{user_section}{environment_section}
 ExecStart={exe_path} {exe_args}
 {install_section}"
     )
+}
+
+fn render_environment_section(environment: &HashMap<String, String>) -> String {
+    if environment.is_empty() {
+        String::new()
+    } else {
+        let key_val_pairs: String = environment
+            .iter()
+            .map(|(key, value)| format!("{}={}", key.shell_escaped(), value.shell_escaped()))
+            .join(" ");
+        format!("\nEnvironment={key_val_pairs}")
+    }
 }
 
 fn render_timer(params: &Params, schedule: &Schedule) -> String {

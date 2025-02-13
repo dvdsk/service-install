@@ -19,11 +19,12 @@ impl Tense {
     }
 }
 
-/// Installation (or removal) configuration, steps and errors.
+/// Installation (or removal) configuration, steps, and errors.
 pub mod install;
+pub use install::Spec;
 /// Scheduling options
 pub mod schedule;
+pub use schedule::Schedule;
 #[cfg(feature = "tui")]
 /// A pre made basic TUI that functions as an install and removal wizard
 pub mod tui;
-
