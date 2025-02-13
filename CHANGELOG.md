@@ -6,15 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## Version 0.5.6 - 2025-02-13
+
 ### Changed
 - `install` and `remove` play better with error wrapping libs as they return concrete 
 error types now
 - we now check if an already existing file is identical byte for byte to what
   we are trying to install
+- `Spec` and `Scheduale` are now also available at the crate root.
 
 ### Added
 - `env_vars` and `env_var` to install builder. They allow setting environmental
   variables.
+- Documentation to all install spec methods including examples
 
 ## Version 0.5.5 - 2025-01-07
 
