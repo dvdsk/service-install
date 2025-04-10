@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use itertools::Itertools;
 
 use crate::install::builder::Trigger;
-use crate::install::init::{EscapedPath, Params, Steps};
+use crate::install::init::{Params, ShellEscape, Steps, SystemdEscape};
 use crate::install::InstallStep;
 use crate::install::Mode;
 use crate::schedule::Schedule;
@@ -259,8 +259,8 @@ fn render_service(params: &Params) -> String {
         .unwrap_or_default();
     let environment_section = render_environment_section(environment);
 
-    let exe_path = exe_path.shell_escaped();
-    let exe_args: String = exe_args.iter().map(String::shell_escaped).join(" \\\n\t");
+    let exe_path = exe_path.systemd_escape();
+    let exe_args: String = exe_args.iter().map(String::systemd_escape).join(" \\\n\t");
 
     let target = match params.mode {
         Mode::User => "default.target",
@@ -292,7 +292,7 @@ fn render_environment_section(environment: &HashMap<String, String>) -> String {
     } else {
         let key_val_pairs: String = environment
             .iter()
-            .map(|(key, value)| format!("{}={}", key.shell_escaped(), value.shell_escaped()))
+            .map(|(key, value)| format!("{}={}", key.systemd_escape(), value.systemd_escape()))
             .join(" ");
         format!("\nEnvironment={key_val_pairs}")
     }
