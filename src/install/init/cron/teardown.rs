@@ -36,7 +36,7 @@ pub(crate) fn path_from_rule(rule: &str) -> PathBuf {
     };
 
     let command = command.trim_start();
-    let command = extract_path::split_unescaped_whitespace_once(command);
+    let command = extract_path::unshell_escape::split_unescaped_whitespace_once(command);
 
     PathBuf::from_str(&command).expect("infallible")
 }

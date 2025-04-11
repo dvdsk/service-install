@@ -1,4 +1,4 @@
-use crate::install::init::systemd::{self, is_active};
+use crate::install::init::systemd;
 use crate::install::{init, InstallError, RollbackStep, Tense};
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -13,6 +13,7 @@ use crate::install::InstallStep;
 use crate::install::Mode;
 use crate::schedule::Schedule;
 
+use super::api::on_seperate_tokio_thread;
 use super::teardown::DisableTimer;
 use super::{teardown, Error};
 
@@ -131,7 +132,9 @@ impl InstallStep for EnableTimer {
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
         let name = self.name.clone() + ".timer";
-        super::enable(name.as_ref(), self.mode, true).map_err(Error::SystemCtl)?;
+        on_seperate_tokio_thread! {{
+            super::enable(name.as_ref(), self.mode, true).await
+        }}?;
         Ok(Some(Box::new(DisableTimer {
             name: self.name.clone(),
             mode: self.mode,
@@ -176,11 +179,14 @@ impl InstallStep for EnableService {
 
     fn perform(&mut self) -> Result<Option<Box<dyn RollbackStep>>, InstallError> {
         let name = self.name.clone() + ".service";
-        super::enable(name.as_ref(), self.mode, self.start).map_err(Error::SystemCtl)?;
+        on_seperate_tokio_thread! {{
+            super::enable(name.as_ref(), self.mode, self.start).await?;
 
-        if self.already_running {
-            super::restart(name.as_ref(), self.mode).map_err(Error::SystemCtl)?;
-        }
+            if self.already_running {
+                super::restart(name.as_ref(), self.mode).await?;
+            }
+            Ok::<_, InstallError>(())
+        }}?;
 
         Ok(Some(Box::new(teardown::DisableService {
             name: self.name.clone(),
@@ -222,8 +228,10 @@ pub(crate) fn without_timer(
 ) -> Result<Steps, systemd::Error> {
     let unit = render_service(params);
     let path = with_added_extension(path_without_extension, "service");
-    let already_running =
-        is_active(&params.name, params.mode).map_err(systemd::Error::CheckingRunning)?;
+    let already_running = on_seperate_tokio_thread! {{
+        systemd::is_active(&params.name, params.mode).await
+    }}?;
+
     let create_service = Box::new(Service { unit, path });
 
     let enable = Box::new(EnableService {

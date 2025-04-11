@@ -7,7 +7,7 @@ use crate::install::init::{extract_path, COMMENT_PREAMBLE, COMMENT_SUFFIX};
 pub(crate) struct Unit {
     body: String,
     pub(crate) path: PathBuf,
-    pub(crate) file_name: OsString,
+    pub(crate) file_name: String,
 }
 
 /// The executables location could not be found. It is needed to safely
@@ -15,11 +15,17 @@ pub(crate) struct Unit {
 #[derive(Debug, thiserror::Error)]
 pub enum FindExeError {
     #[error("Could not read systemd unit file at: {path}")]
-    ReadingUnit { #[source] err: std::io::Error, path: PathBuf },
+    ReadingUnit {
+        #[source]
+        err: std::io::Error,
+        path: PathBuf,
+    },
     #[error("ExecStart (use to find binary) is missing from servic unit at: {0}")]
     ExecLineMissing(PathBuf),
     #[error("Path to binary extracted from systemd unit does not lead to a file, path: {0}")]
     ExecPathNotFile(PathBuf),
+    #[error("Could not un-escape/un-quote the Exec line in the unit file")]
+    Unquoting(#[source] extract_path::unsystemd_quote::UnquoteError),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -27,14 +33,25 @@ pub enum Error {
     #[error("File has no file name, can not be a systemd unit")]
     NoName,
     #[error("Could not read unit's content: {0}")]
-    FailedToRead(#[from] #[source] std::io::Error),
+    FailedToRead(
+        #[from]
+        #[source]
+        std::io::Error,
+    ),
+    #[error("File has a non utf8 file name, that is not supported")]
+    NonUtf8,
 }
 
 impl Unit {
     pub(crate) fn from_path(path: PathBuf) -> Result<Self, Error> {
         Ok(Self {
             body: std::fs::read_to_string(&path)?,
-            file_name: path.file_name().ok_or(Error::NoName)?.to_os_string(),
+            file_name: path
+                .file_name()
+                .ok_or(Error::NoName)?
+                .to_str()
+                .ok_or(Error::NonUtf8)?
+                .to_string(),
             path,
         })
     }
@@ -45,9 +62,11 @@ impl Unit {
             .lines()
             .map(str::trim)
             .find_map(|l| l.strip_prefix("ExecStart="))
-            .map(extract_path::split_unescaped_whitespace_once)
+            .map(extract_path::unsystemd_quote::first_segement)
+            .transpose()
+            .map_err(FindExeError::Unquoting)?
             .ok_or(FindExeError::ExecLineMissing(self.path.clone()))?;
-        let exe_path = Path::new(&exe_path).to_path_buf();
+        let exe_path = Path::new(exe_path.as_ref()).to_path_buf();
         if exe_path.is_file() {
             Ok(exe_path)
         } else {

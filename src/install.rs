@@ -10,6 +10,7 @@ use std::fmt::Display;
 
 pub use builder::Spec;
 use files::MoveBackError;
+use init::systemd;
 use itertools::{Either, Itertools};
 
 use crate::Tense;
@@ -17,7 +18,6 @@ use crate::Tense;
 use self::builder::ToAssign;
 use self::init::cron::teardown::CrontabChanged;
 use self::init::cron::{GetCrontabError, SetCrontabError};
-use self::init::systemd::SystemCtlError;
 use self::init::SetupError;
 
 /// Whether to install system wide or for the current user only
@@ -155,6 +155,8 @@ pub enum InstallError {
     CopyExeError(#[source] std::io::Error),
     #[error("Failed to make short lived backup of file taking up install location")]
     Backup(#[source] BackupError),
+    #[error("Could not spawn a tokio runtime for interacting with systemd")]
+    TokioRt(#[source] std::io::Error),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -293,7 +295,7 @@ pub enum RollbackError {
     ReEnabling(
         #[from]
         #[source]
-        SystemCtlError,
+        systemd::Error,
     ),
     #[error("Can not rollback setting up cron, must be done manually")]
     Impossible,

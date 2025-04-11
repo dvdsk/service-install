@@ -5,9 +5,6 @@
 
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
-use std::thread;
-use std::time::{Duration, Instant};
 use std::{fs, io};
 
 use crate::install::builder::Trigger;
@@ -18,6 +15,7 @@ use self::unit::Unit;
 
 use super::{ExeLocation, Mode, Params, PathCheckError, RSteps, SetupError, Steps, TearDownError};
 
+mod api;
 mod disable_existing;
 mod setup;
 mod teardown;
@@ -49,12 +47,6 @@ pub enum SystemCtlError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("Could not configure systemd")]
-    SystemCtl(
-        #[from]
-        #[source]
-        SystemCtlError,
-    ),
     #[error("Could not write out unit file to {path}")]
     Writing {
         #[source]
@@ -77,6 +69,22 @@ pub enum Error {
     ),
     #[error("Could not check if there is an existing service we will replace")]
     CheckingRunning(#[source] SystemCtlError),
+    #[error("Could not enable the service")]
+    Enabling(#[source] api::Error),
+    #[error("Could not start the service")]
+    Starting(#[source] api::Error),
+    #[error("Could not restart the service")]
+    Restarting(#[source] api::Error),
+    #[error("Could not disable the service")]
+    Disabling(#[source] api::Error),
+    #[error("Could not stop the service")]
+    Stopping(#[source] api::Error),
+    #[error("Could not check if the service is active or not")]
+    CheckActive(#[source] api::Error),
+    #[error("Error while waiting for service to be started")]
+    WaitingForStart(#[source] api::WaitError),
+    #[error("Error while waiting for service to be stopped")]
+    WaitingForStop(#[source] api::WaitError),
 }
 
 pub(crate) fn path_is_systemd(path: &Path) -> Result<bool, PathCheckError> {
@@ -92,7 +100,7 @@ pub(crate) fn path_is_systemd(path: &Path) -> Result<bool, PathCheckError> {
         .any(|c| c == "systemd"))
 }
 
-// check if systemd is the init system (PID 1)
+// Check if systemd is the init system (PID 1)
 pub(super) fn not_available() -> Result<bool, SetupError> {
     use sysinfo::{Pid, System};
     let mut s = System::new();
@@ -192,87 +200,48 @@ fn system_path() -> PathBuf {
     PathBuf::from("/etc/systemd/system")
 }
 
-fn systemctl(args: &[&'static str], service: &OsStr) -> Result<(), SystemCtlError> {
-    let output = Command::new("systemctl").args(args).arg(service).output()?;
-
-    if output.status.success() {
-        return Ok(());
+async fn enable(unit: &str, mode: Mode, and_start: bool) -> Result<(), Error> {
+    api::enable_service(unit, mode)
+        .await
+        .map_err(Error::Enabling)?;
+    if and_start {
+        api::start_service(unit, mode)
+            .await
+            .map_err(Error::Starting)?;
+        api::wait_for_active(unit, mode)
+            .await
+            .map_err(Error::WaitingForStart)?;
     }
-
-    let reason = String::from_utf8_lossy(&output.stderr).to_string();
-    Err(SystemCtlError::Failed { reason })
+    Ok(())
 }
 
-fn is_active(service: impl AsRef<OsStr>, mode: Mode) -> Result<bool, SystemCtlError> {
-    let args = match mode {
-        Mode::System => &["is-active"][..],
-        Mode::User => &["is-active", "--user"][..],
-    };
-
-    let output = Command::new("systemctl").args(args).arg(service).output()?;
-    Ok(output.status.code().ok_or(SystemCtlError::Terminated)? == 0)
+async fn restart(unit_file_name: &str, mode: Mode) -> Result<(), Error> {
+    api::restart(unit_file_name, mode)
+        .await
+        .map_err(Error::Restarting)
 }
 
-fn wait_for(
-    service: &OsStr,
-    state: bool,
-    mode: Mode,
-    timeout_error: SystemCtlError,
-) -> Result<(), SystemCtlError> {
-    let start = Instant::now();
-    while start.elapsed() < Duration::from_secs(1) {
-        if state == is_active(service, mode)? {
-            return Ok(());
-        }
-        thread::sleep(Duration::from_millis(50));
+async fn disable(unit_file_name: &str, mode: Mode, and_stop: bool) -> Result<(), Error> {
+    api::disable_service(unit_file_name, mode)
+        .await
+        .map_err(Error::Disabling)?;
+    if and_stop {
+        stop(unit_file_name, mode).await?;
+        api::wait_for_active(unit_file_name, mode)
+            .await
+            .map_err(Error::WaitingForStop)?;
     }
-    Err(timeout_error)
+    Ok(())
 }
 
-fn enable(unit: &OsStr, mode: Mode, start: bool) -> Result<(), SystemCtlError> {
-    let mut args = match mode {
-        Mode::System => vec!["enable"],
-        Mode::User => vec!["enable", "--user"],
-    };
-
-    if start {
-        args.push("--now");
-    }
-
-    systemctl(&args, unit)?;
-    wait_for(unit, true, mode, SystemCtlError::RestartTimeOut)
+async fn stop(unit_file_name: &str, mode: Mode) -> Result<(), Error> {
+    api::stop_service(unit_file_name, mode)
+        .await
+        .map_err(Error::Stopping)
 }
 
-fn restart(unit: &OsStr, mode: Mode) -> Result<(), SystemCtlError> {
-    let args = match mode {
-        Mode::System => vec!["restart"],
-        Mode::User => vec!["restart", "--user"],
-    };
-
-    systemctl(&args, unit)?;
-    wait_for(unit, true, mode, SystemCtlError::RestartTimeOut)
-}
-
-fn disable(unit: &OsStr, mode: Mode, start: bool) -> Result<(), SystemCtlError> {
-    let mut args = match mode {
-        Mode::System => vec!["disable"],
-        Mode::User => vec!["disable", "--user"],
-    };
-
-    if start {
-        args.push("--now");
-    }
-
-    systemctl(&args, unit)?;
-    wait_for(unit, false, mode, SystemCtlError::DisableTimeOut)
-}
-
-fn stop(unit: &OsStr, mode: Mode) -> Result<(), SystemCtlError> {
-    let args = match mode {
-        Mode::System => &["stop"][..],
-        Mode::User => &["stop", "--user"][..],
-    };
-
-    systemctl(args, unit)?;
-    wait_for(unit, false, mode, SystemCtlError::StopTimeOut)
+async fn is_active(unit_file_name: &str, mode: Mode) -> Result<bool, Error> {
+    api::is_active(unit_file_name, mode)
+        .await
+        .map_err(Error::CheckActive)
 }

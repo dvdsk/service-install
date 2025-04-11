@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use crate::install::init::systemd::api::on_seperate_tokio_thread;
 use crate::install::init::RSteps;
 use crate::install::Mode;
 use crate::install::RemoveError;
@@ -67,8 +68,9 @@ impl RemoveStep for DisableService {
 
     fn perform(&mut self) -> Result<(), RemoveError> {
         let name = self.name.clone() + ".service";
-        disable(name.as_ref(), self.mode, self.stop).map_err(Error::SystemCtl)?;
-        Ok(())
+        on_seperate_tokio_thread! {{
+            disable(name.as_ref(), self.mode, self.stop).await.map_err(RemoveError::Systemd)
+        }}
     }
 }
 
@@ -107,12 +109,19 @@ impl RemoveStep for DisableTimer {
             Tense::Future => "Will disable",
             Tense::Active => "Disabling",
         };
-        format!("{verb} systemd {} timer: {}{}", self.mode, self.name, tense.punct())
+        format!(
+            "{verb} systemd {} timer: {}{}",
+            self.mode,
+            self.name,
+            tense.punct()
+        )
     }
 
     fn perform(&mut self) -> Result<(), RemoveError> {
         let name = self.name.clone() + ".timer";
-        disable(name.as_ref(), self.mode, true).map_err(Error::SystemCtl)?;
+        on_seperate_tokio_thread! {{
+            disable(name.as_ref(), self.mode, true).await.map_err(RemoveError::Systemd)
+        }}?;
         Ok(())
     }
 }

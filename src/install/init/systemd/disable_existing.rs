@@ -8,6 +8,7 @@ use tracing::debug;
 use crate::install::{InstallError, InstallStep, RollbackError, RollbackStep};
 use crate::Tense;
 
+use super::api::on_seperate_tokio_thread;
 use super::unit::{self, Unit};
 use super::{system_path, user_path, FindExeError, Mode};
 
@@ -19,7 +20,9 @@ struct ReEnable {
 impl RollbackStep for ReEnable {
     fn perform(&mut self) -> Result<(), RollbackError> {
         for unit in &self.units {
-            super::enable(&unit.file_name, self.mode, true)?;
+            on_seperate_tokio_thread! {{
+                super::enable(&unit.file_name, self.mode, true).await.map_err(RollbackError::ReEnabling)
+            }}?;
         }
         Ok(())
     }
@@ -70,14 +73,14 @@ impl InstallStep for Disable {
         let services: String = self
             .services
             .iter()
-            .map(|unit| unit.file_name.to_string_lossy().to_string())
+            .map(|unit| unit.file_name.to_string())
             .map(|unit| format!("\n|\t- {unit}"))
             .collect();
         #[allow(clippy::format_collect)]
         let timers: String = self
             .timers
             .iter()
-            .map(|unit| unit.file_name.to_string_lossy().to_string())
+            .map(|unit| unit.file_name.to_string())
             .map(|unit| format!("\n|\t- {unit}"))
             .collect();
 
@@ -104,15 +107,18 @@ impl InstallStep for Disable {
             mode: self.mode,
             units: Vec::new(),
         });
-        for unit in &self.services {
-            super::disable(&unit.file_name, self.mode, true).map_err(super::Error::SystemCtl)?;
-            rollback.units.push(unit.clone());
-        }
-        for unit in &self.timers {
-            super::disable(&unit.file_name, self.mode, true).map_err(super::Error::SystemCtl)?;
-            super::stop(&unit.name(), self.mode).map_err(super::Error::SystemCtl)?;
-            rollback.units.push(unit.clone());
-        }
+        on_seperate_tokio_thread!{{
+            for unit in &self.services {
+                super::disable(&unit.file_name, self.mode, true).await?;
+                rollback.units.push(unit.clone());
+            }
+            for unit in &self.timers {
+                super::disable(&unit.file_name, self.mode, true).await?;
+                super::stop(&unit.file_name, self.mode).await?;
+                rollback.units.push(unit.clone());
+            }
+            Ok(())
+        }}.map_err(InstallError::Systemd)?;
         let rollback = rollback as Box<dyn RollbackStep>;
         Ok(Some(rollback))
     }

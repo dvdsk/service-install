@@ -200,10 +200,6 @@ impl ShellEscape for String {
     }
 }
 
-trait SystemdEscape {
-    fn systemd_escape(&self) -> String;
-}
-
 // man 7 syntax
 //
 // For settings where quoting is allowed, the following general rules apply:
@@ -213,6 +209,10 @@ trait SystemdEscape {
 // or the end of line), in which case everything until the next matching
 // quote becomes part of the same item. Quotes themselves are removed. C-style
 // escapes are supported.
+trait SystemdEscape {
+    fn systemd_escape(&self) -> String;
+}
+
 impl SystemdEscape for String {
     fn systemd_escape(&self) -> String {
         // escaped / -> // and escaped " -> /"
@@ -226,6 +226,12 @@ impl SystemdEscape for String {
 impl SystemdEscape for &std::path::Path {
     fn systemd_escape(&self) -> String {
         self.display().to_string().systemd_escape()
+    }
+}
+
+impl SystemdEscape for &str {
+    fn systemd_escape(&self) -> String {
+        self.to_string().systemd_escape()
     }
 }
 

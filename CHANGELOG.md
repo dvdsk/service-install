@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- systemd unit file values are now quoted following the systemd standard instead
+  of shell escaped
+
 ## Version 0.5.6 - 2025-02-13
 
 ### Changed

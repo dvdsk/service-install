@@ -125,20 +125,3 @@ fn format_error_chain(root: &dyn std::error::Error) -> String {
 
     res
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::install::init::systemd::{Error, SystemCtlError};
-    use crate::install::RemoveError;
-
-    use super::*;
-
-    #[test]
-    fn test_error_chain_format() {
-        let error = RemoveError::Systemd(Error::SystemCtl(SystemCtlError::Io(
-            std::io::Error::new(std::io::ErrorKind::Other, "test"),
-        )));
-
-        assert_eq!(format_error_chain(&error), "");
-    }
-}
