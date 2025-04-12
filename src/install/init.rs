@@ -247,9 +247,15 @@ mod tests {
 
     #[test]
     fn escape_with_exclamation() {
-        let s = "ontspan in stoel/1/11:00..16:30/!"
+        let s = "message with spaces/1/11:00..16:30/!"
             .to_string()
             .systemd_escape();
-        assert_eq!(&s, "hi");
+        assert_eq!(&s, "\"message with spaces/1/11:00..16:30/!\"");
+    }
+
+    #[test]
+    fn escape_single_letter() {
+        let s = "v".to_string().systemd_escape();
+        assert_eq!(&s, "\"v\"");
     }
 }

@@ -35,6 +35,33 @@ fn escape_oct2(chars: &mut CharIter) -> Result<char, UnquoteError> {
     unicode_char_from_char_digits(2, 8, chars)
 }
 
+const ESCAPES_LENGTH_ONE: [(char, char); 11] = [
+    ('a', '\u{0007}'), // bell
+    ('b', '\u{0008}'), // backspace
+    ('f', '\u{000C}'), // form feed
+    ('n', '\n'),       // newline
+    ('r', '\r'),       // carriage return
+    ('t', '\t'),       // tab
+    ('v', '\u{000B}'), // vertical tab
+    ('\\', '\\'),      // backslash
+    ('"', '"'),        // double quotation mark
+    ('\'', '\''),      // single quotation mark
+    ('s', ' '),        // space
+];
+
+const ESCAPES_LONGER_THEN_ONE: [(
+    char,
+    fn(&mut std::str::Chars<'_>) -> Result<char, UnquoteError>,
+); 4] = [
+    (
+        'x',
+        escape_hex2 as fn(&mut CharIter) -> Result<char, UnquoteError>,
+    ),
+    ('n', escape_oct2),
+    ('u', escape_hex4),
+    ('U', escape_hex8),
+];
+
 #[derive(Debug, thiserror::Error)]
 pub enum UnquoteError {
     #[error(
@@ -51,47 +78,17 @@ pub enum UnquoteError {
     DoesNotFitBase { base: u32, char: char },
     #[error("The digit ({0}) encoded by the escaped sequence is not a valid unicode")]
     InvalidUnicode(u32),
+    #[error("Missing end quote: {0}")]
+    MissingEndQuo(char),
 }
 
-/// Attempt at getting binary path/name from systemd Exec line, effectively turns:
-/// `"cmd \" with space" arg1 arg2`
-/// into
-/// `cmd \" with space`
-/// while not perfect for undoing systemd escape its a good start
-pub fn first_segement(line: &str) -> Result<Cow<str>, UnquoteError> {
-    let Some(line) = line.strip_prefix('"') else {
-        return Ok(Cow::Borrowed(
-            line.split(' ')
-                .next()
-                .expect("split always returns at least one item"),
-        ));
-    };
-    let line = dbg!(line.strip_suffix('"')).unwrap_or(line);
-    let mut chars = line.chars();
-    let escapes_length_one = [
-        ('a', '\u{0007}'), // bell
-        ('b', '\u{0008}'), // backspace
-        ('f', '\u{000C}'), // form feed
-        ('n', '\n'),       // newline
-        ('r', '\r'),       // carriage return
-        ('t', '\t'),       // tab
-        ('v', '\u{000B}'), // vertical tab
-        ('\\', '\\'),      // backslash
-        ('"', '"'),        // double quotation mark
-        ('\'', '\''),      // single quotation mark
-        ('s', ' '),        // space
-    ];
+fn decoded_unquoted_first_segment(unquoted_start: &str) -> Result<Cow<str>, UnquoteError> {
+    let first_segment = unquoted_start
+        .split(' ')
+        .next()
+        .expect("split always returns at least one item");
 
-    let escapes_longer_then_one = [
-        (
-            'x',
-            escape_hex2 as fn(&mut CharIter) -> Result<char, UnquoteError>,
-        ),
-        ('n', escape_oct2),
-        ('u', escape_hex4),
-        ('U', escape_hex8),
-    ];
-
+    let mut chars = first_segment.chars();
     let Some(mut a) = chars.next() else {
         return Ok(Cow::Owned(String::new()));
     };
@@ -103,11 +100,11 @@ pub fn first_segement(line: &str) -> Result<Cow<str>, UnquoteError> {
 
         if a == '\\' {
             if let Some((_, unescaped)) =
-                escapes_length_one.iter().find(|(literal, _)| *literal == b)
+                ESCAPES_LENGTH_ONE.iter().find(|(literal, _)| *literal == b)
             {
                 output.push(*unescaped);
                 let _ = chars.by_ref().skip(1).count();
-            } else if let Some((_, unescaper)) = escapes_longer_then_one
+            } else if let Some((_, unescaper)) = ESCAPES_LONGER_THEN_ONE
                 .iter()
                 .find(|(literal, _)| *literal == b)
             {
@@ -116,9 +113,79 @@ pub fn first_segement(line: &str) -> Result<Cow<str>, UnquoteError> {
                 return Err(UnquoteError::UnknownEscape(b));
             }
         } else if a == '"' {
+            // Found not escaped quote, this could be the start of another section
+            // end here
             return Ok(Cow::Owned(output));
+        } else {
+            output.push(a);
         }
         a = b;
+    }
+}
+
+/// Attempt at getting binary path/name from systemd Exec line. That is
+/// typically the first segment. The first segment is
+/// defined as the first
+///
+/// # Example
+/// ```compile_fail
+/// // example not compile since first_segement is not public
+/// let escaped = "\"/long/\\x70ath/with\\x20spaces\\x20/to/cmd\"";
+/// let cmd = first_segement(&escaped).unwrap();
+/// assert_eq!(cmd, "/long/path/with spaces /to/cmd");
+/// ```
+///
+/// # Note
+/// This does not account for trailing backslashes and newlines. Any line
+/// with those in them might not be properly unquoted/unescaped.
+pub(crate) fn first_segement(line: &str) -> Result<Cow<str>, UnquoteError> {
+    let line = line.trim();
+    let (line, segment_end) = if let Some(line) = line.strip_prefix('"') {
+        (line, '"')
+    } else if let Some(line) = line.strip_prefix('\'') {
+        (line, '\'')
+    } else {
+        return decoded_unquoted_first_segment(line);
+    };
+    let mut chars = line.chars();
+
+    let mut next_a = None;
+    let mut output = String::new();
+    loop {
+        let Some(a) = next_a.take().or_else(|| chars.next()) else {
+            return Ok(Cow::Owned(output));
+        };
+        let Some(b) = chars.next() else {
+            let last_char = a;
+            if last_char != segment_end {
+                return Err(UnquoteError::MissingEndQuo(segment_end));
+            } else {
+                return Ok(Cow::Owned(output));
+            }
+        };
+        (a, b);
+
+        if a == '\\' {
+            if let Some((_, unescaped)) =
+                ESCAPES_LENGTH_ONE.iter().find(|(literal, _)| *literal == b)
+            {
+                output.push(*unescaped);
+                let _ = chars.by_ref().skip(1).count();
+            } else if let Some((_, unescaper)) = ESCAPES_LONGER_THEN_ONE
+                .iter()
+                .find(|(literal, _)| *literal == b)
+            {
+                output.push(unescaper(chars.by_ref())?);
+            } else {
+                return Err(UnquoteError::UnknownEscape(b));
+            }
+        } else if a == segment_end {
+            // Found not escaped quote, this is the end of the first section
+            return Ok(Cow::Owned(output));
+        } else {
+            output.push(a);
+            next_a = Some(b);
+        }
     }
 }
 
@@ -138,7 +205,9 @@ mod tests {
         };
     }
 
-    escaped_sequences! {"0x69", "1", hex2}
+    escaped_sequences! {"\\x69", "i", hex2}
+    escaped_sequences! {"\\u2665", "♥", heart}
+    escaped_sequences! {"\\u03A9", "Ω", omega}
 
     macro_rules! first_segement_test {
         ($test_case:literal, $test_name:ident) => {
@@ -155,6 +224,7 @@ mod tests {
 
     first_segement_test! {"/long/path with spaces/to/cmd", spaces}
     first_segement_test! {"v", single_letter}
+    first_segement_test! {"abc", three_letters}
     first_segement_test! {"/long              spaces/cmd", long_spaces}
     first_segement_test! {"///////cmd", many_slashes}
     first_segement_test! {"/strange\'name\"", name_with_quotes}
@@ -163,9 +233,9 @@ mod tests {
     fn hex() {
         // Hex 70 is ascii P
         // Hex 20 is ascii space
-        let escaped = "\"/long/\\x70ath/withx20spacesx20/to/cmd\"";
+        let escaped = "\"/long/\\x70ath/with\\x20spaces\\x20/to/cmd\"";
         let cmd = first_segement(&escaped).unwrap();
-        assert_eq!(cmd, "/long/path with spaces/to/cmd");
+        assert_eq!(cmd, "/long/path/with spaces /to/cmd");
     }
 
     #[test]
