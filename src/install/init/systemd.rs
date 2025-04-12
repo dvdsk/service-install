@@ -85,6 +85,8 @@ pub enum Error {
     WaitingForStart(#[source] api::WaitError),
     #[error("Error while waiting for service to be stopped")]
     WaitingForStop(#[source] api::WaitError),
+    #[error("Could not reload services")]
+    Reloading(#[source] api::Error),
 }
 
 pub(crate) fn path_is_systemd(path: &Path) -> Result<bool, PathCheckError> {
@@ -201,6 +203,7 @@ fn system_path() -> PathBuf {
 }
 
 async fn enable(unit: &str, mode: Mode, and_start: bool) -> Result<(), Error> {
+    api::reload(mode).await.map_err(Error::Reloading)?;
     api::enable_service(unit, mode)
         .await
         .map_err(Error::Enabling)?;
@@ -227,7 +230,7 @@ async fn disable(unit_file_name: &str, mode: Mode, and_stop: bool) -> Result<(),
         .map_err(Error::Disabling)?;
     if and_stop {
         stop(unit_file_name, mode).await?;
-        api::wait_for_active(unit_file_name, mode)
+        api::wait_for_inactive(unit_file_name, mode)
             .await
             .map_err(Error::WaitingForStop)?;
     }

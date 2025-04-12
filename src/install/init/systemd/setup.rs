@@ -17,12 +17,12 @@ use super::api::on_seperate_tokio_thread;
 use super::teardown::DisableTimer;
 use super::{teardown, Error};
 
-struct Service {
+struct WriteService {
     unit: String,
     path: PathBuf,
 }
 
-impl InstallStep for Service {
+impl InstallStep for WriteService {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Wrote",
@@ -63,12 +63,12 @@ impl InstallStep for Service {
     }
 }
 
-struct Timer {
+struct WriteTimer {
     unit: String,
     path: PathBuf,
 }
 
-impl InstallStep for Timer {
+impl InstallStep for WriteTimer {
     fn describe(&self, tense: Tense) -> String {
         let verb = match tense {
             Tense::Past => "Wrote",
@@ -210,10 +210,10 @@ pub(crate) fn with_timer(
 ) -> Steps {
     let unit = render_service(params);
     let path = with_added_extension(path_without_extension, "service");
-    let create_service = Box::new(Service { unit, path });
+    let create_service = Box::new(WriteService { unit, path });
     let unit = render_timer(params, schedule);
     let path = with_added_extension(path_without_extension, "timer");
-    let create_timer = Box::new(Timer { unit, path });
+    let create_timer = Box::new(WriteTimer { unit, path });
     let enable = Box::new(EnableTimer {
         name: params.name.clone(),
         mode: params.mode,
@@ -232,7 +232,7 @@ pub(crate) fn without_timer(
         systemd::is_active(&params.name, params.mode).await
     }}?;
 
-    let create_service = Box::new(Service { unit, path });
+    let create_service = Box::new(WriteService { unit, path });
 
     let enable = Box::new(EnableService {
         name: params.name.clone(),

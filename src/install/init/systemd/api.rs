@@ -32,6 +32,7 @@ macro_rules! on_seperate_tokio_thread {
         std::thread::scope(|s| {
             s.spawn(|| {
                 tokio::runtime::Builder::new_current_thread()
+                    .enable_time()
                     .build()
                     .expect("should be able to spawn tokio runtime")
                     .block_on(async { $code })
@@ -178,6 +179,21 @@ pub(crate) async fn wait_for_active(service: &str, mode: super::Mode) -> Result<
         }
         if unit == ActiveState::Failed {
             return Err(WaitError::UnitFailed);
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    Err(WaitError::TimedOut)
+}
+
+pub(crate) async fn wait_for_inactive(service: &str, mode: super::Mode) -> Result<(), WaitError> {
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(10) {
+        let unit = unit_activity(service, mode)
+            .await
+            .map_err(WaitError::ListUnits)?
+            .ok_or(WaitError::ServiceNotFound)?;
+        if unit == ActiveState::Inactive {
+            return Ok(());
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
