@@ -56,6 +56,7 @@ pub(crate) fn set_up_steps(params: &Params) -> Result<Steps, SetupError> {
 
     let when = match params.trigger {
         OnSchedule(S::Daily(time)) => format!("{} {} * * *", time.minute(), time.hour()),
+        OnSchedule(S::Every(dur)) => format!("{}, * * * *", dur.as_secs()),
         OnBoot => "@reboot".to_owned(),
     };
 
